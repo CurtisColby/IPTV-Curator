@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IPTV Curator</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0c;--s1:#111114;--s2:#18181c;--s3:#202025;
+  --border:#2a2a30;--border2:#3a3a42;
+  --text:#e8e8ec;--text2:#9898a8;--text3:#5a5a6a;
+  --accent:#7c6af7;--accent-bg:#1a1830;--accent-border:#3d3478;
+  --green:#34d87a;--green-bg:#0d2518;--green-border:#1a4d2e;
+  --red:#f25c5c;--red-bg:#220f0f;--red-border:#4d1a1a;
+  --amber:#f5a623;--amber-bg:#251a06;--amber-border:#4d3510;
+  --r:8px;--mono:'JetBrains Mono','Fira Code',ui-monospace,monospace;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+
+/* ── Root layout: left list | right panel, both full-height, no page scroll ── */
+.layout{display:grid;grid-template-columns:1fr 400px;flex:1;min-height:0;overflow:hidden}
+.left-col{display:flex;flex-direction:column;border-right:1px solid var(--border);min-height:0;overflow:hidden}
+.right-col{display:flex;flex-direction:column;background:var(--s1);min-height:0;overflow:hidden}
+
+/* ── Left: fixed top controls, scrollable list ── */
+.left-fixed{flex-shrink:0}
+.channel-scroll{flex:1;overflow-y:auto;padding:6px 8px;min-height:0}
+.channel-scroll::-webkit-scrollbar{width:5px}
+.channel-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* ── Right: sticky player top, scrollable mylist bottom ── */
+.player-sticky{flex-shrink:0}
+.mylist-panel{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.mylist-scroll{flex:1;overflow-y:auto;padding:6px 8px;min-height:0}
+.mylist-scroll::-webkit-scrollbar{width:4px}
+.mylist-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ── Header ── */
+.app-header{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--s1)}
+.app-logo{width:28px;height:28px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.app-logo svg{width:15px;height:15px;fill:#fff}
+.app-title{font-size:13px;font-weight:600;letter-spacing:-0.2px}
+.app-sub{font-size:10px;color:var(--text3);margin-top:1px}
+.header-stats{display:flex;gap:4px;margin-left:auto;align-items:center;flex-wrap:wrap}
+.hstat{font-size:11px;padding:2px 8px;border-radius:100px;font-weight:600;font-variant-numeric:tabular-nums;border:1px solid var(--border);color:var(--text2)}
+.hstat.s-live{background:var(--green-bg);color:var(--green);border-color:var(--green-border)}
+.hstat.s-checked{color:var(--accent);background:var(--accent-bg);border-color:var(--accent-border)}
+.hstat.s-star{color:var(--amber);background:var(--amber-bg);border-color:var(--amber-border)}
+
+/* ── Input bar ── */
+.input-bar{padding:9px 13px;border-bottom:1px solid var(--border);background:var(--s1)}
+.input-row{display:flex;gap:6px;align-items:center}
+.url-input{flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:11px;padding:0 10px;height:32px;outline:none;transition:border-color .15s}
+.url-input:focus{border-color:var(--accent)}
+.url-input::placeholder{color:var(--text3)}
+.opts-row{display:flex;gap:10px;margin-top:7px;align-items:center;flex-wrap:wrap}
+.ck-label{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);cursor:pointer;user-select:none}
+.ck-label input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:pointer}
+.sel-wrap{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)}
+.sel-wrap select{background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:11px;padding:2px 5px;outline:none;cursor:pointer}
+
+/* ── Buttons ── */
+button{height:32px;padding:0 12px;border-radius:var(--r);font-size:12px;font-weight:500;cursor:pointer;border:none;transition:opacity .15s,transform .1s;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+button:active{transform:scale(0.97)}
+button:disabled{opacity:.3;cursor:not-allowed;transform:none}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover:not(:disabled){opacity:.85}
+.btn-ghost{background:var(--s3);color:var(--text2);border:1px solid var(--border)}
+.btn-ghost:hover:not(:disabled){color:var(--text);border-color:var(--border2)}
+.btn-green{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.btn-green:hover:not(:disabled){opacity:.8}
+.btn-amber{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
+.btn-amber:hover:not(:disabled){opacity:.8}
+.btn-red{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.btn-red:hover:not(:disabled){opacity:.8}
+.btn-sm{height:26px;padding:0 9px;font-size:11px}
+
+/* ── Progress ── */
+.progress-bar-wrap{height:3px;background:var(--s2)}
+.progress-bar-fill{height:100%;background:var(--accent);width:0%;transition:width .15s}
+
+/* ── Filter notice ── */
+.filter-notice{padding:5px 13px;background:var(--amber-bg);border-bottom:1px solid var(--amber-border);font-size:11px;color:var(--amber);display:none;align-items:center;gap:5px}
+
+/* ── Toolbar ── */
+.toolbar{padding:6px 12px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;background:var(--s1);flex-wrap:wrap}
+.search-input{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-size:11px;padding:0 9px;height:26px;outline:none;width:150px;transition:border-color .15s}
+.search-input:focus{border-color:var(--accent)}
+.search-input::placeholder{color:var(--text3)}
+.filter-tabs{display:flex;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.ftab{height:26px;padding:0 10px;background:var(--s2);color:var(--text3);border:none;font-size:11px;border-radius:0;cursor:pointer;transition:background .1s,color .1s}
+.ftab:active{transform:none}
+.ftab+.ftab{border-left:1px solid var(--border)}
+.ftab.active{background:var(--s3);color:var(--text)}
+.toolbar-right{margin-left:auto;display:flex;gap:5px;align-items:center}
+.sel-count{font-size:11px;color:var(--text3)}
+
+/* ── Channel rows ── */
+.ch-row{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:var(--r);border:1px solid transparent;margin-bottom:2px;transition:background .1s,border-color .1s}
+.ch-row:hover{background:var(--s2);border-color:var(--border)}
+.ch-row.playing{background:var(--accent-bg);border-color:var(--accent-border)}
+.ch-row.hidden{display:none}
+.ch-row.eng-override{border-left:2px solid var(--green)}
+.ch-cb{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+.ch-logo{width:24px;height:24px;border-radius:5px;object-fit:contain;background:var(--s3);flex-shrink:0;border:1px solid var(--border)}
+.ch-logo-ph{width:24px;height:24px;border-radius:5px;background:var(--s3);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:8px;font-weight:700;border:1px solid var(--border)}
+.ch-info{flex:1;min-width:0}
+.ch-name{font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-meta{font-size:10px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-actions{display:flex;align-items:center;gap:3px;flex-shrink:0}
+.ch-star{background:none;border:none;padding:2px;height:auto;color:var(--text3);font-size:16px;cursor:pointer;border-radius:4px;transition:color .15s;line-height:1}
+.ch-star:active{transform:scale(0.9)}
+.ch-star.starred{color:var(--amber)}
+.ch-icon-btn{background:none;border:1px solid var(--border2);padding:0;width:24px;height:24px;border-radius:5px;color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.ch-icon-btn:hover{color:var(--text);background:var(--s3)}
+.ch-icon-btn:active{transform:scale(0.9)}
+.ch-icon-btn.play-btn:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+.ch-icon-btn.play-btn.playing{background:var(--accent);border-color:var(--accent);color:#fff}
+.ch-badge{font-size:10px;padding:2px 6px;border-radius:100px;font-weight:600;border:1px solid var(--border);color:var(--text3);flex-shrink:0;min-width:42px;text-align:center}
+.badge-live{background:var(--green-bg);color:var(--green);border-color:var(--green-border)}
+.badge-dead{background:var(--red-bg);color:var(--red);border-color:var(--red-border)}
+.badge-checking{color:var(--text3);animation:pulse 1s infinite}
+.badge-geo{background:#1a1030;color:#a855f7;border-color:#5b21b6}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+/* ── Player (sticky top of right col) ── */
+.player-header{padding:9px 13px;border-bottom:1px solid var(--border)}
+.player-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.player-meta{font-size:10px;color:var(--text3);margin-top:2px}
+.audio-label{font-size:10px;color:var(--text3);margin-top:5px;display:none}
+.audio-tracks{display:flex;gap:3px;flex-wrap:wrap;margin-top:3px}
+.audio-pill{font-size:10px;padding:2px 7px;border-radius:100px;border:1px solid var(--border2);color:var(--text2);background:var(--s3);cursor:pointer;transition:all .15s;font-weight:500}
+.audio-pill:hover{border-color:var(--accent);color:var(--accent)}
+.audio-pill.active{background:var(--accent-bg);border-color:var(--accent-border);color:var(--accent)}
+.audio-pill.eng{background:var(--green-bg);border-color:var(--green-border);color:var(--green)}
+.audio-pill.eng.active{box-shadow:0 0 0 1px var(--green)}
+
+.player-wrap{position:relative;background:#000}
+.player-wrap::before{content:'';display:block;padding-top:56.25%}
+#player-video{position:absolute;top:0;left:0;width:100%;height:100%}
+.player-idle{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--text3);pointer-events:none}
+.player-idle svg{width:30px;height:30px;opacity:.2}
+.player-idle p{font-size:11px}
+
+.player-status-bar{padding:6px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.player-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);flex-shrink:0}
+.player-dot.live{background:var(--green);box-shadow:0 0 5px var(--green)}
+.player-dot.error{background:var(--red)}
+.player-status-text{font-size:11px;color:var(--text3);flex:1}
+.player-action-btns{display:flex;gap:4px;margin-left:auto}
+
+/* ── My list ── */
+.mylist-header{padding:7px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;flex-shrink:0}
+.mylist-title{font-size:12px;font-weight:600}
+.mylist-count{font-size:10px;color:var(--text3);background:var(--s3);border-radius:100px;padding:1px 7px;border:1px solid var(--border)}
+.mylist-empty{padding:1.2rem;text-align:center;color:var(--text3);font-size:11px;line-height:1.6}
+.mylist-row{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:6px;margin-bottom:2px;border:1px solid transparent}
+.mylist-row:hover{background:var(--s2);border-color:var(--border)}
+.mylist-logo{width:20px;height:20px;border-radius:4px;object-fit:contain;background:var(--s3);flex-shrink:0}
+.mylist-name{flex:1;font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mylist-star{font-size:11px;flex-shrink:0;color:var(--text3)}
+.mylist-star.starred{color:var(--amber)}
+.mylist-remove{background:none;border:none;padding:2px 4px;height:auto;color:var(--text3);cursor:pointer;border-radius:3px;font-size:13px;line-height:1;flex-shrink:0}
+.mylist-remove:hover{color:var(--red)}
+.mylist-actions{padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap}
+
+/* ── Host modal ── */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:center;justify-content:center}
+.modal-backdrop.open{display:flex}
+.modal{background:var(--s2);border:1px solid var(--border2);border-radius:12px;width:520px;max-width:calc(100vw - 2rem);max-height:calc(100vh - 2rem);overflow-y:auto;padding:1.25rem}
+.modal h2{font-size:15px;font-weight:600;margin-bottom:4px}
+.modal-sub{font-size:12px;color:var(--text3);margin-bottom:1rem}
+.modal-section{margin-bottom:1.1rem}
+.modal-section-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.modal-section-title .badge{font-size:10px;padding:1px 7px;border-radius:100px;font-weight:500;text-transform:none;letter-spacing:0}
+.badge-easy{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.badge-ext{background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-border)}
+.modal p{font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:8px}
+.modal code,.modal pre{font-family:var(--mono);font-size:11px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--green);padding:2px 7px;display:inline}
+.code-block{display:block;padding:10px 13px;white-space:pre;overflow-x:auto;margin:6px 0;line-height:1.5}
+.copy-row{display:flex;align-items:center;gap:6px;margin-top:4px}
+.copy-input{flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-family:var(--mono);font-size:11px;padding:5px 9px;outline:none}
+.modal-close{float:right;background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0;height:auto;line-height:1}
+.modal-close:hover{color:var(--text)}
+.modal-close:active{transform:none}
+.divider{border:none;border-top:1px solid var(--border);margin:1rem 0}
+
+/* ── Empty state ── */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:3rem 2rem;color:var(--text3)}
+.empty-state svg{width:38px;height:38px;opacity:.2}
+.empty-state p{font-size:12px}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%) translateY(8px);background:var(--s3);border:1px solid var(--border2);border-radius:var(--r);padding:7px 14px;font-size:12px;color:var(--text);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:200;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ══ LEFT COLUMN ══ -->
+  <div class="left-col">
+    <div class="left-fixed">
+      <div class="app-header">
+        <div class="app-logo">
+          <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2H6v2h12v-2h-2v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12zM9 10l6 3.5L9 17V10z"/></svg>
+        </div>
+        <div>
+          <div class="app-title">IPTV Curator</div>
+          <div class="app-sub">Build your NostalgiaTV playlist</div>
+        </div>
+        <div class="header-stats">
+          <span class="hstat" id="hs-total">— total</span>
+          <span class="hstat s-live" id="hs-live">— live</span>
+          <span class="hstat s-checked" id="hs-checked">— selected</span>
+          <span class="hstat s-star" id="hs-star">— ★</span>
+        </div>
+      </div>
+
+      <div class="input-bar">
+        <div class="input-row" style="margin-bottom:6px">
+          <select id="playlist-picker" onchange="pickPlaylist(this)" style="flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:var(--r);color:var(--text2);font-size:11px;padding:0 9px;height:32px;outline:none;cursor:pointer">
+            <option value="">— Quick-load a popular playlist —</option>
+            <optgroup label="🎬 IPTV-org by Category">
+              <option value="https://iptv-org.github.io/iptv/categories/movies.m3u">IPTV-org · Movies</option>
+              <option value="https://iptv-org.github.io/iptv/categories/news.m3u">IPTV-org · News</option>
+              <option value="https://iptv-org.github.io/iptv/categories/documentary.m3u">IPTV-org · Documentary</option>
+              <option value="https://iptv-org.github.io/iptv/categories/comedy.m3u">IPTV-org · Comedy</option>
+              <option value="https://iptv-org.github.io/iptv/categories/music.m3u">IPTV-org · Music</option>
+              <option value="https://iptv-org.github.io/iptv/categories/kids.m3u">IPTV-org · Kids</option>
+              <option value="https://iptv-org.github.io/iptv/categories/sports.m3u">IPTV-org · Sports</option>
+            </optgroup>
+            <optgroup label="🇺🇸 IPTV-org by Country">
+              <option value="https://iptv-org.github.io/iptv/countries/us.m3u">IPTV-org · USA</option>
+              <option value="https://iptv-org.github.io/iptv/countries/gb.m3u">IPTV-org · UK</option>
+              <option value="https://iptv-org.github.io/iptv/countries/ca.m3u">IPTV-org · Canada</option>
+              <option value="https://iptv-org.github.io/iptv/countries/au.m3u">IPTV-org · Australia</option>
+            </optgroup>
+            <optgroup label="🌐 IPTV-org Full Index">
+              <option value="https://iptv-org.github.io/iptv/index.m3u">IPTV-org · All channels (~42k)</option>
+              <option value="https://iptv-org.github.io/iptv/index.language.m3u">IPTV-org · By language</option>
+            </optgroup>
+            <optgroup label="📺 Free Ad-Supported (FAST) — US">
+              <option value="https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/refs/heads/main/playlists/plutotv_us.m3u">Pluto TV (USA)</option>
+              <option value="https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/refs/heads/main/playlists/plutotv_all.m3u">Pluto TV (International, no geo-lock)</option>
+              <option value="https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/refs/heads/main/playlists/roku_all.m3u">The Roku Channel (USA)</option>
+              <option value="https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/refs/heads/main/playlists/tubi_all.m3u">Tubi TV (USA)</option>
+              <option value="https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/refs/heads/main/playlists/plex_all.m3u">Plex TV (USA)</option>
+              <option value="https://apsattv.com/ssungusa.m3u">Samsung TV Plus (USA)</option>
+              <option value="https://www.apsattv.com/uslg.m3u">LG Channels (USA)</option>
+              <option value="https://www.apsattv.com/vizio.m3u">Vizio WatchFree (USA)</option>
+              <option value="https://www.apsattv.com/xumo.m3u">XUMO (USA)</option>
+              <option value="https://www.apsattv.com/localnow.m3u">Local Now (USA)</option>
+              <option value="https://www.apsattv.com/firetv.m3u">Amazon Fire TV (USA)</option>
+            </optgroup>
+            <optgroup label="🌍 International, No Geo-lock">
+              <option value="https://www.apsattv.com/distro.m3u">DistroTV (International)</option>
+              <option value="https://www.apsattv.com/xiaomi.m3u">Xiaomi TV (International)</option>
+              <option value="https://www.apsattv.com/vidaa.m3u">Vidaa / Hisense (International)</option>
+              <option value="https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8">Free-TV (Multi-region)</option>
+              <option value="https://www.apsattv.com/rakutentv-uk.m3u">Rakuten TV (UK)</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="input-row">
+          <input class="url-input" id="playlist-url" type="url"
+            placeholder="https://iptv-org.github.io/iptv/categories/movies.m3u"
+            value="https://iptv-org.github.io/iptv/categories/movies.m3u"/>
+          <button class="btn-primary" id="btn-start" onclick="startProcess()">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Check
+          </button>
+          <button class="btn-ghost" id="btn-stop" onclick="stopProcess()" disabled>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>Stop
+          </button>
+        </div>
+        <div class="opts-row">
+          <label class="ck-label"><input type="checkbox" id="opt-english" checked> English filter</label>
+          <label class="ck-label"><input type="checkbox" id="opt-hide-geo"> Hide geo-blocked</label>
+          <label class="ck-label"><input type="checkbox" id="opt-proxy"> CORS proxy</label>
+          <div class="sel-wrap">Res <select id="opt-res">
+            <option value="all">All</option>
+            <option value="hd">HD+ (720p/1080p/4K)</option>
+            <option value="fhd">FHD+ (1080p/4K only)</option>
+            <option value="sd">SD only</option>
+          </select></div>
+          <div class="sel-wrap">Timeout <select id="opt-timeout"><option value="5000">5s</option><option value="7000" selected>7s</option><option value="10000">10s</option><option value="15000">15s</option></select></div>
+          <div class="sel-wrap">Workers <select id="opt-concurrency"><option value="3">3</option><option value="6" selected>6</option><option value="10">10</option><option value="15">15</option></select></div>
+        </div>
+      </div>
+
+      <div class="filter-notice" id="filter-notice">
+        ⚠ English filter is best-effort — preview channels and use "Confirm English" or "Exclude" buttons in the player.
+      </div>
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" id="prog-fill"></div></div>
+
+      <div class="toolbar" id="toolbar" style="display:none">
+        <input class="search-input" id="search-input" type="text" placeholder="Search…" oninput="applyFilters()">
+        <div class="filter-tabs">
+          <button class="ftab active" id="ftab-all"      onclick="setFilter('all')">All</button>
+          <button class="ftab"        id="ftab-live"     onclick="setFilter('live')">Live</button>
+          <button class="ftab"        id="ftab-starred"  onclick="setFilter('starred')">★ Starred</button>
+          <button class="ftab"        id="ftab-geo"      onclick="setFilter('geo')">🚫 Geo</button>
+          <button class="ftab"        id="ftab-excluded" onclick="setFilter('excluded')">Excluded</button>
+        </div>
+        <div class="toolbar-right">
+          <span class="sel-count" id="sel-count"></span>
+          <button class="btn-ghost btn-sm" onclick="selectAllLive()">All live</button>
+          <button class="btn-ghost btn-sm" onclick="selectNone()">None</button>
+          <button class="btn-green btn-sm" onclick="addSelectedToList()">+ My list</button>
+        </div>
+      </div>
+    </div><!-- /left-fixed -->
+
+    <div class="channel-scroll" id="channel-scroll">
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        <p>Enter a playlist URL and hit Check</p>
+      </div>
+    </div>
+  </div><!-- /left-col -->
+
+  <!-- ══ RIGHT COLUMN ══ -->
+  <div class="right-col">
+
+    <!-- Sticky player -->
+    <div class="player-sticky">
+      <div class="player-header">
+        <div class="player-title" id="player-title">No channel selected</div>
+        <div class="player-meta" id="player-meta">Click ▶ on any channel to preview</div>
+        <div class="audio-label" id="audio-label">Audio tracks:</div>
+        <div class="audio-tracks" id="audio-tracks"></div>
+      </div>
+      <div class="player-wrap">
+        <video id="player-video" controls playsinline></video>
+        <div class="player-idle" id="player-idle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="5,3 19,12 5,21"/></svg>
+          <p>Select a channel to preview</p>
+        </div>
+      </div>
+      <div class="player-status-bar">
+        <div class="player-dot" id="player-dot"></div>
+        <span class="player-status-text" id="player-status-text">Idle</span>
+        <div class="player-action-btns">
+          <button class="btn-green btn-sm" id="btn-confirm-eng" style="display:none" onclick="confirmEnglish()">✓ Confirm English</button>
+          <button class="btn-amber btn-sm" id="btn-exclude"     style="display:none" onclick="excludeChannel()">✕ Exclude</button>
+        </div>
+      </div>
+    </div><!-- /player-sticky -->
+
+    <!-- Scrollable my list -->
+    <div class="mylist-panel">
+      <div class="mylist-header">
+        <div class="mylist-title">My list</div>
+        <div class="mylist-count" id="mylist-count">0</div>
+        <button class="btn-ghost btn-sm" style="margin-left:auto" onclick="clearMyList()">Clear</button>
+      </div>
+      <div class="mylist-scroll" id="mylist-scroll">
+        <div class="mylist-empty">Star ★ a channel or check ✓ + "+ My list" to add channels here</div>
+      </div>
+      <div class="mylist-actions">
+        <button class="btn-green" style="flex:1" onclick="exportMyList()">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          Export .m3u
+        </button>
+        <button class="btn-ghost" onclick="exportStarred()">★ Starred</button>
+        <button class="btn-ghost" onclick="$('import-file').click()" title="Import a previously exported .m3u back into My List">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" transform="rotate(180 12 12)"/></svg>
+          Import
+        </button>
+        <input type="file" id="import-file" accept=".m3u,.m3u8" style="display:none" onchange="importMyList(event)">
+        <button class="btn-amber" onclick="openHostModal()">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+          Host it
+        </button>
+      </div>
+    </div>
+  </div><!-- /right-col -->
+</div><!-- /layout -->
+
+<!-- ══ Host Modal ══ -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="handleBackdropClick(event)">
+  <div class="modal" id="modal">
+    <button class="modal-close" onclick="closeHostModal()">✕</button>
+    <h2>Host your playlist</h2>
+    <p class="modal-sub">NostalgiaTV needs a URL, not a file. Pick a method below.</p>
+
+    <div class="modal-section">
+      <div class="modal-section-title">
+        Option 1 — Your PlexServer (LAN)
+        <span class="badge badge-easy">Easiest</span>
+      </div>
+      <p>Since you already run a home server, drop the exported <code>.m3u</code> there and serve it with this one-liner. Your playlist will be available at a permanent local URL.</p>
+      <p><strong style="color:var(--text);font-size:12px">Step 1</strong> — Export your list (click "Export .m3u"), save it as <code>playlist.m3u</code> anywhere on the server.</p>
+      <p><strong style="color:var(--text);font-size:12px">Step 2</strong> — Run this in that folder (Python is pre-installed on most Linux boxes):</p>
+      <pre class="code-block">cd /path/to/your/playlist/folder
+python3 -m http.server 8765</pre>
+      <p><strong style="color:var(--text);font-size:12px">Step 3</strong> — To keep it running permanently, add it as a systemd service or run it in a Docker container. Or add it to your existing Docker Compose stack:</p>
+      <pre class="code-block">services:
+  playlist-server:
+    image: python:3-alpine
+    volumes:
+      - /path/to/playlist/folder:/data
+    working_dir: /data
+    command: python3 -m http.server 8765
+    ports:
+      - "8765:8765"
+    restart: unless-stopped</pre>
+      <p><strong style="color:var(--text);font-size:12px">Step 4</strong> — Find your server's local IP (run <code>hostname -I</code>) then paste this into NostalgiaTV:</p>
+      <div class="copy-row">
+        <input class="copy-input" id="lan-url-input" value="http://192.168.1.100:8765/playlist.m3u" readonly onclick="this.select()"/>
+        <button class="btn-ghost btn-sm" onclick="copyLanUrl()">Copy</button>
+      </div>
+      <p style="margin-top:6px;font-size:11px;color:var(--text3)">Replace <code>192.168.1.100</code> with your actual server IP. Update the file anytime — NostalgiaTV will pick up the changes on next refresh.</p>
+    </div>
+
+    <hr class="divider">
+
+    <div class="modal-section">
+      <div class="modal-section-title">
+        Option 2 — GitHub Gist (anywhere)
+        <span class="badge badge-ext">Free, public</span>
+      </div>
+      <p>Create a free GitHub account, go to <a href="https://gist.github.com" target="_blank" style="color:var(--accent)">gist.github.com</a>, paste your M3U content, set filename to <code>playlist.m3u</code>, and click "Create public gist". Then click "Raw" and copy that URL into NostalgiaTV.</p>
+      <p style="color:var(--text3);font-size:11px">Note: Gist raw URLs are public. Don't include any personal streams or credentials in the file.</p>
+    </div>
+
+    <hr class="divider">
+
+    <div class="modal-section">
+      <div class="modal-section-title">
+        Option 3 — Paste as raw text
+        <span class="badge badge-ext">Quick test</span>
+      </div>
+      <p>Copy the raw M3U text below and paste it directly into any IPTV app that accepts raw playlist text (some do under "Add as text" or "Paste M3U").</p>
+      <button class="btn-ghost btn-sm" onclick="copyRawM3U()" style="margin-bottom:6px">Copy raw M3U to clipboard</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const PROXY = 'https://corsproxy.io/?';
+let channels  = [];
+let myList    = [];
+let liveCount = 0, deadCount = 0, checkedCount = 0;
+let stopped   = false;
+let currentFilter = 'all';
+let currentHls    = null;
+let playingIdx    = -1;
+
+// ── Persist ──
+function save() {
+  try { localStorage.setItem('iptv-mylist', JSON.stringify(myList)); } catch(e) {}
+}
+function loadMyList() {
+  try { myList = JSON.parse(localStorage.getItem('iptv-mylist') || '[]'); } catch(e) { myList = []; }
+  renderMyList();
+}
+
+// ── Playlist picker ──
+function pickPlaylist(sel) {
+  if (!sel.value) return;
+  $('playlist-url').value = sel.value;
+  sel.value = ''; // reset so same item can be re-selected
+}
+
+// ── Resolution detection from channel name ──
+function detectRes(ch) {
+  const n = (ch.name + ' ' + (ch.group||'')).toUpperCase();
+  if (/\b(4K|UHD|2160|ULTRA)\b/.test(n)) return '4k';
+  if (/\b(FHD|1080[PI]?|FULLHD|FULL HD)\b/.test(n)) return 'fhd';
+  if (/\b(HD|720[PI]?|HQ)\b/.test(n)) return 'hd';
+  if (/\b(SD|480[PI]?|360[PI]?|LOW)\b/.test(n)) return 'sd';
+  return 'unknown'; // no label — don't filter out
+}
+
+function matchesRes(ch, filter) {
+  if (filter === 'all') return true;
+  const r = detectRes(ch);
+  if (filter === 'hd')  return r === 'hd' || r === 'fhd' || r === '4k' || r === 'unknown';
+  if (filter === 'fhd') return r === 'fhd' || r === '4k' || r === 'unknown';
+  if (filter === 'sd')  return r === 'sd'  || r === 'unknown';
+  return true;
+}
+
+// ── Parse M3U ──
+function parseM3U(text) {
+  const lines = text.split('\n');
+  const result = [];
+  let cur = null;
+  for (const raw of lines) {
+    const l = raw.trim();
+    if (l.startsWith('#EXTINF')) {
+      const g = rx => { const m = l.match(rx); return m ? m[1] : ''; };
+      cur = {
+        name:     (l.match(/,(.+)$/) || [])[1]?.trim() || 'Unknown',
+        language: g(/tvg-language="([^"]+)"/i),
+        country:  g(/tvg-country="([^"]+)"/i),
+        logo:     g(/tvg-logo="([^"]+)"/i),
+        group:    g(/group-title="([^"]+)"/i),
+        extinf: l, url: '',
+        status: 'pending', starred: false, checked: false,
+        engConfirmed: false, excluded: false
+      };
+    } else if (l.startsWith('http') && cur) {
+      cur.url = l; result.push(cur); cur = null;
+    }
+  }
+  return result;
+}
+
+// ── English detection ──
+const ENG_COUNTRIES = new Set(['US','GB','CA','AU','NZ','IE','ZA','JM','TT','BB','GY','BZ','GH','NG','KE','UG','TZ','ZW']);
+const NON_LATIN_RX  = /[\u0400-\u04FF\u0600-\u06FF\u0900-\u097F\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF\u0E00-\u0E7F\u0590-\u05FF]/;
+const NON_ENG_RX    = /\b(hindi|arabic|french|fran[cç]ais|español|spanish|german|deutsch|italiano|italian|portugu[eê]s|portuguese|russian|chinese|korean|japanese|dutch|polish|turkish|persian|urdu|malay|thai|vietnamese|greek|hebrew|romanian|czech|hungarian|swedish|norwegian|danish|finnish|tagalog|swahili|bengali|punjabi|gujarati|tamil|telugu|kannada|malayalam|burmese|khmer|mongolian|albanian|serbian|croatian|bulgarian|slovak|latvian|lithuanian|estonian|azerbaijani|georgian|armenian|kazakh|uzbek)\b/i;
+const ENG_WORD_RX   = /\b(the|and|news|live|sports?|movies?|channel|network|tv|hd|ultra|prime|classic|cinema|action|comedy|drama|family|kids?|music|national|international|world|america[n]?|british|english|nbc|abc|cbs|fox|cnn|hbo|amc|syfy|espn|bbc|itv|sky|pbs)\b/i;
+
+function isEnglish(ch) {
+  const lang    = ch.language.toLowerCase().trim();
+  const country = ch.country.toUpperCase().trim();
+  const name    = ch.name;
+  if (lang) return /^(english|eng|en(-\w+)?)$/.test(lang) || lang.includes('english');
+  if (country && ENG_COUNTRIES.has(country)) return true;
+  if (NON_LATIN_RX.test(name)) return false;
+  if (NON_ENG_RX.test(name))   return false;
+  if (ENG_WORD_RX.test(name))  return true;
+  return true; // untagged, permissive
+}
+
+// ── Helpers ──
+function $(id) { return document.getElementById(id); }
+function showToast(msg, dur=2600) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), dur);
+}
+function initials(n) { return n.split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?'; }
+function makeLogo(ch, cls, phCls) {
+  if (ch.logo) {
+    const img = document.createElement('img');
+    img.className = cls; img.src = ch.logo; img.alt = '';
+    img.onerror = function() { const p=document.createElement('div'); p.className=phCls; p.textContent=initials(ch.name); this.replaceWith(p); };
+    return img;
+  }
+  const p = document.createElement('div'); p.className = phCls; p.textContent = initials(ch.name);
+  return p;
+}
+function updateStats() {
+  $('hs-total').textContent   = channels.length + ' total';
+  $('hs-live').textContent    = liveCount + ' live';
+  const sel = channels.filter(c=>c.checked).length;
+  $('hs-checked').textContent = sel + ' selected';
+  $('hs-star').textContent    = channels.filter(c=>c.starred).length + ' ★';
+  $('sel-count').textContent  = sel ? sel + ' selected' : '';
+  $('mylist-count').textContent = myList.length;
+}
+
+// ── Channel row ──
+function createRow(ch, idx) {
+  const row = document.createElement('div');
+  row.className = 'ch-row' + (ch.engConfirmed?' eng-override':'');
+  row.id = 'row-' + idx;
+
+  const cb = document.createElement('input');
+  cb.type='checkbox'; cb.className='ch-cb'; cb.checked=ch.checked;
+  cb.onchange = () => { ch.checked = cb.checked; updateStats(); };
+  row.appendChild(cb);
+
+  row.appendChild(makeLogo(ch,'ch-logo','ch-logo-ph'));
+
+  const info = document.createElement('div'); info.className='ch-info';
+  const nm = document.createElement('div'); nm.className='ch-name'; nm.textContent=ch.name; nm.title=ch.name;
+  const mt = document.createElement('div'); mt.className='ch-meta';
+  mt.textContent = [ch.language||null,ch.country||null,ch.group||null].filter(Boolean).join(' · ')||'Untagged';
+  info.appendChild(nm); info.appendChild(mt);
+  row.appendChild(info);
+
+  const acts = document.createElement('div'); acts.className='ch-actions';
+
+  // recheck
+  const rc = document.createElement('button'); rc.className='ch-icon-btn'; rc.title='Re-check stream';
+  rc.innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.96 7.96 0 0012 4c-4.42 0-8 3.58-8 8s3.58 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>';
+  rc.onclick = () => recheckOne(ch,idx);
+  acts.appendChild(rc);
+
+  // play
+  const pl = document.createElement('button'); pl.className='ch-icon-btn play-btn'; pl.id='play-'+idx; pl.title='Preview';
+  pl.innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+  pl.onclick = () => playChannel(ch,idx);
+  acts.appendChild(pl);
+
+  // star — starring also adds to My List
+  const st = document.createElement('button'); st.className='ch-star'+(ch.starred?' starred':''); st.id='star-'+idx; st.title='Star (also adds to My list)'; st.textContent='★';
+  st.onclick = () => {
+    ch.starred = !ch.starred;
+    st.className = 'ch-star'+(ch.starred?' starred':'');
+    if (ch.starred) addToMyList(ch);   // auto-add on star
+    else removeFromList(ch.url);       // auto-remove on unstar
+    updateStats();
+  };
+  acts.appendChild(st);
+
+  const badge = document.createElement('div');
+  badge.className = 'ch-badge'+(ch.status==='live'?' badge-live':ch.status==='dead'?' badge-dead':'');
+  badge.id='badge-'+idx;
+  badge.textContent = ch.status==='live'?'● Live':ch.status==='dead'?'✕ Dead':'—';
+  acts.appendChild(badge);
+
+  row.appendChild(acts);
+  return row;
+}
+
+function renderChannels() {
+  const scroll = $('channel-scroll');
+  scroll.innerHTML='';
+  if (!channels.length) {
+    scroll.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><p>No channels matched</p></div>';
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  channels.forEach((ch,i) => frag.appendChild(createRow(ch,i)));
+  scroll.appendChild(frag);
+  applyFilters();
+}
+
+// ── Filters ──
+function setFilter(f) {
+  currentFilter = f;
+  ['all','live','starred','geo','excluded'].forEach(x => $('ftab-'+x)?.classList.toggle('active',x===f));
+  applyFilters();
+}
+function applyFilters() {
+  const q        = $('search-input').value.toLowerCase();
+  const resFilter= $('opt-res')?.value || 'all';
+  const hideGeo  = $('opt-hide-geo')?.checked;
+  channels.forEach((ch,i) => {
+    const row = $('row-'+i); if (!row) return;
+    const mq  = !q || ch.name.toLowerCase().includes(q)||(ch.country||'').toLowerCase().includes(q)||(ch.language||'').toLowerCase().includes(q)||(ch.group||'').toLowerCase().includes(q);
+    const mf  = currentFilter==='all'      ? !ch.excluded
+              : currentFilter==='live'     ? ch.status==='live'&&!ch.excluded
+              : currentFilter==='starred'  ? ch.starred&&!ch.excluded
+              : currentFilter==='geo'      ? ch.status==='geo'
+              : currentFilter==='excluded' ? ch.excluded : true;
+    const mRes = matchesRes(ch, resFilter);
+    const mGeo = !(hideGeo && ch.status==='geo');
+    row.classList.toggle('hidden', !(mq && mf && mRes && mGeo));
+  });
+}
+
+// ── Check streams ──
+async function checkOne(ch) {
+  const useProxy = $('opt-proxy').checked;
+  const timeout  = parseInt($('opt-timeout').value);
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), timeout);
+  let ok = false, httpCode = null;
+  try {
+    const url = useProxy ? PROXY+encodeURIComponent(ch.url) : ch.url;
+    const res = await fetch(url,{method:'HEAD',signal:ctrl.signal,mode:'cors'});
+    clearTimeout(timer);
+    httpCode = res.status;
+    ok = res.ok||[200,206,301,302].includes(res.status);
+  } catch { clearTimeout(timer); }
+  // Geo-block: 403 Forbidden, 451 Unavailable For Legal Reasons, 407 Proxy Auth (region wall)
+  ch.geoBlocked = [403,451,407].includes(httpCode);
+  ch.status = ok ? 'live' : ch.geoBlocked ? 'geo' : 'dead';
+  return ok;
+}
+
+async function recheckOne(ch,idx) {
+  const badge=$('badge-'+idx), wasLive=ch.status==='live';
+  badge.textContent='…'; badge.className='ch-badge badge-checking';
+  const ok = await checkOne(ch);
+  if (ok&&!wasLive) liveCount++;
+  if (!ok&&wasLive) { liveCount=Math.max(0,liveCount-1); deadCount++; }
+  const isGeo=ch.status==='geo';
+  badge.textContent=ok?'● Live':isGeo?'🚫 Geo':'✕ Dead';
+  badge.className='ch-badge '+(ok?'badge-live':isGeo?'badge-geo':'badge-dead');
+  $('hs-live').textContent=liveCount+' live';
+}
+
+async function startProcess() {
+  const url = $('playlist-url').value.trim();
+  if (!url) { showToast('Enter a playlist URL first.'); return; }
+  stopped=false; liveCount=0; deadCount=0; checkedCount=0; channels=[];
+  stopPlayer();
+  $('btn-start').disabled=true; $('btn-stop').disabled=false;
+  $('toolbar').style.display='none';
+  $('prog-fill').style.width='0%';
+  updateStats();
+
+  const useProxy=$('opt-proxy').checked;
+  let text;
+  try {
+    const res=await fetch(useProxy?PROXY+encodeURIComponent(url):url);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    text=await res.text();
+  } catch(e) {
+    showToast('Could not fetch playlist: '+e.message,4000);
+    $('btn-start').disabled=false; $('btn-stop').disabled=true; return;
+  }
+
+  const parsed=parseM3U(text);
+  const filterEn=$('opt-english').checked;
+  channels=filterEn?parsed.filter(isEnglish):parsed;
+  $('filter-notice').style.display=filterEn?'flex':'none';
+  updateStats(); renderChannels(); $('toolbar').style.display='flex';
+
+  const concurrency=parseInt($('opt-concurrency').value);
+  let idx=0;
+  async function worker() {
+    while(idx<channels.length&&!stopped) {
+      const i=idx++, ch=channels[i];
+      const badge=$('badge-'+i);
+      if(badge){badge.textContent='…';badge.className='ch-badge badge-checking';}
+      const ok=await checkOne(ch);
+      checkedCount++;
+      if(ok) liveCount++; else deadCount++;
+      $('prog-fill').style.width=Math.round(checkedCount/channels.length*100)+'%';
+      $('hs-live').textContent=liveCount+' live';
+      if(badge){
+        const isGeo=ch.status==='geo';
+        badge.textContent=ok?'● Live':isGeo?'🚫 Geo':'✕ Dead';
+        badge.className='ch-badge '+(ok?'badge-live':isGeo?'badge-geo':'badge-dead');
+      }
+    }
+  }
+  await Promise.all(Array.from({length:concurrency},worker));
+  $('btn-start').disabled=false; $('btn-stop').disabled=true;
+  showToast(stopped?`Stopped — ${liveCount} live so far`:`Done — ${liveCount} live out of ${channels.length}`);
+}
+function stopProcess(){ stopped=true; $('btn-stop').disabled=true; }
+
+// ── Selection ──
+function selectAllLive() {
+  channels.forEach((ch,i)=>{ if(ch.status==='live'&&!ch.excluded){ch.checked=true;const cb=$('row-'+i)?.querySelector('.ch-cb');if(cb)cb.checked=true;} });
+  updateStats();
+}
+function selectNone() {
+  channels.forEach((ch,i)=>{ ch.checked=false;const cb=$('row-'+i)?.querySelector('.ch-cb');if(cb)cb.checked=false; });
+  updateStats();
+}
+
+// ── My List ──
+function addToMyList(ch) {
+  if (!myList.find(m=>m.url===ch.url)) { myList.push({...ch}); save(); renderMyList(); }
+}
+function addSelectedToList() {
+  const sel=channels.filter(c=>c.checked&&!c.excluded);
+  if(!sel.length){showToast('Check some channels first.');return;}
+  let added=0;
+  sel.forEach(ch=>{ if(!myList.find(m=>m.url===ch.url)){myList.push({...ch});added++;} });
+  save(); renderMyList(); updateStats();
+  showToast(added?`Added ${added} channel${added>1?'s':''}.`:'Already in your list.');
+}
+function removeFromList(url) {
+  myList=myList.filter(m=>m.url!==url);
+  save(); renderMyList(); updateStats();
+}
+function clearMyList() {
+  if(!myList.length)return;
+  if(!confirm('Clear your entire list?'))return;
+  myList=[]; save(); renderMyList(); updateStats(); showToast('List cleared.');
+}
+function renderMyList() {
+  const scroll=$('mylist-scroll');
+  $('mylist-count').textContent=myList.length;
+  if(!myList.length){scroll.innerHTML='<div class="mylist-empty">Star ★ a channel or check ✓ + "+ My list" to add channels here</div>';return;}
+  scroll.innerHTML='';
+  const frag=document.createDocumentFragment();
+  myList.forEach(ch=>{
+    const row=document.createElement('div'); row.className='mylist-row';
+    const logo=document.createElement('img'); logo.className='mylist-logo'; logo.src=ch.logo||''; logo.alt='';
+    logo.onerror=function(){this.style.display='none';};
+    const name=document.createElement('div'); name.className='mylist-name'; name.textContent=ch.name; name.title=ch.name;
+    const star=document.createElement('span'); star.className='mylist-star'+(ch.starred?' starred':''); star.textContent='★';
+    const rm=document.createElement('button'); rm.className='mylist-remove'; rm.textContent='✕'; rm.title='Remove';
+    rm.onclick=()=>removeFromList(ch.url);
+    row.appendChild(logo); row.appendChild(name); row.appendChild(star); row.appendChild(rm);
+    frag.appendChild(row);
+  });
+  scroll.appendChild(frag);
+}
+
+// ── Player ──
+function playChannel(ch,idx) {
+  if(playingIdx===idx){stopPlayer();return;}
+  stopPlayer(); playingIdx=idx;
+  document.querySelectorAll('.ch-row').forEach(r=>r.classList.remove('playing'));
+  document.querySelectorAll('.play-btn').forEach(b=>b.classList.remove('playing'));
+  const row=$('row-'+idx); if(row)row.classList.add('playing');
+  const btn=$('play-'+idx); if(btn)btn.classList.add('playing');
+
+  $('player-title').textContent=ch.name;
+  $('player-meta').textContent=[ch.language,ch.country,ch.group].filter(Boolean).join(' · ')||'Untagged';
+  $('player-idle').style.display='none';
+  $('audio-tracks').innerHTML=''; $('audio-label').style.display='none';
+  $('btn-confirm-eng').style.display='none'; $('btn-exclude').style.display='none';
+  setStatus('loading','Connecting…');
+
+  const video=$('player-video');
+  const url=ch.url;
+  const isHLS=url.includes('.m3u8')||url.includes('m3u8')||url.endsWith('/');
+
+  if(Hls.isSupported()&&(isHLS||!url.match(/\.(mp4|mkv|avi|mov|wmv)$/i))){
+    const hls=new Hls({enableWorker:false,maxBufferLength:15,maxMaxBufferLength:30});
+    currentHls=hls; hls.loadSource(url); hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>{
+      video.play().catch(()=>{});
+      setStatus('live','Live');
+      $('btn-confirm-eng').style.display=ch.engConfirmed?'none':'flex';
+      $('btn-exclude').style.display='flex';
+    });
+    hls.on(Hls.Events.AUDIO_TRACKS_UPDATED,()=>renderAudioTracks(hls,ch));
+    hls.on(Hls.Events.AUDIO_TRACK_SWITCHED,()=>renderAudioTracks(hls,ch));
+    hls.on(Hls.Events.ERROR,(_,data)=>{
+      if(data.fatal){setStatus('error','Stream error — try another channel');$('btn-exclude').style.display='flex';}
+    });
+  } else {
+    video.src=url;
+    video.onplaying=()=>{setStatus('live','Live');$('btn-confirm-eng').style.display=ch.engConfirmed?'none':'flex';$('btn-exclude').style.display='flex';};
+    video.onerror=()=>{setStatus('error','Could not play stream');$('btn-exclude').style.display='flex';};
+    video.play().catch(()=>{});
+  }
+}
+
+function renderAudioTracks(hls,ch) {
+  const tracks=hls.audioTracks; if(!tracks||!tracks.length)return;
+  $('audio-label').style.display='block';
+  const container=$('audio-tracks'); container.innerHTML='';
+  const ENG=new Set(['english','eng','en','en-us','en-gb']);
+  let hasEng=false, firstEngIdx=-1;
+  tracks.forEach((t,i)=>{
+    const lang=(t.lang||t.language||'').toLowerCase();
+    const name=t.name||t.lang||'Track '+(i+1);
+    const isEng=ENG.has(lang)||/english/i.test(name);
+    if(isEng&&firstEngIdx<0)firstEngIdx=i;
+    if(isEng)hasEng=true;
+    const pill=document.createElement('button');
+    pill.className='audio-pill'+(isEng?' eng':'')+(hls.audioTrack===i?' active':'');
+    pill.textContent=name+(lang&&lang!==name.toLowerCase()?` (${lang})`:'');
+    pill.onclick=()=>{hls.audioTrack=i;document.querySelectorAll('.audio-pill').forEach((p,j)=>p.classList.toggle('active',j===i));};
+    container.appendChild(pill);
+  });
+  if(hasEng&&firstEngIdx>=0){
+    hls.audioTrack=firstEngIdx;
+    document.querySelectorAll('.audio-pill').forEach((p,j)=>p.classList.toggle('active',j===firstEngIdx));
+    setStatus('live',`Live — ${tracks.length} audio track${tracks.length>1?'s':''}, auto-switched to English`);
+    $('btn-confirm-eng').style.display='none';
+  } else {
+    setStatus('live',`Live — ${tracks.length} audio track${tracks.length>1?'s':''} detected`);
+  }
+}
+
+function stopPlayer() {
+  const video=$('player-video');
+  if(currentHls){currentHls.destroy();currentHls=null;}
+  video.pause(); video.removeAttribute('src'); video.load();
+  video.onplaying=null; video.onerror=null;
+  document.querySelectorAll('.ch-row').forEach(r=>r.classList.remove('playing'));
+  document.querySelectorAll('.play-btn').forEach(b=>b.classList.remove('playing'));
+  $('player-idle').style.display='flex';
+  $('player-title').textContent='No channel selected';
+  $('player-meta').textContent='Click ▶ on any channel to preview';
+  $('audio-tracks').innerHTML=''; $('audio-label').style.display='none';
+  $('btn-confirm-eng').style.display='none'; $('btn-exclude').style.display='none';
+  setStatus('idle','Idle'); playingIdx=-1;
+}
+function setStatus(state,text) {
+  $('player-dot').className='player-dot'+(state==='live'?' live':state==='error'?' error':'');
+  $('player-status-text').textContent=text;
+}
+
+// ── Confirm / Exclude ──
+function confirmEnglish() {
+  if(playingIdx<0)return;
+  const ch=channels[playingIdx]; ch.engConfirmed=true; ch.excluded=false;
+  const row=$('row-'+playingIdx); if(row)row.classList.add('eng-override');
+  $('btn-confirm-eng').style.display='none';
+  showToast(`"${ch.name}" confirmed as English.`);
+}
+function excludeChannel() {
+  if(playingIdx<0)return;
+  const ch=channels[playingIdx]; ch.excluded=true; ch.checked=false;
+  const row=$('row-'+playingIdx);
+  if(row){row.classList.add('hidden');const cb=row.querySelector('.ch-cb');if(cb)cb.checked=false;}
+  removeFromList(ch.url); stopPlayer(); updateStats();
+  showToast(`"${ch.name}" excluded.`);
+}
+
+// ── Export ──
+function buildM3U(list) {
+  return '#EXTM3U\n'+list.map(ch=>ch.extinf+'\n'+ch.url).join('\n')+'\n';
+}
+function dl(content,name) {
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type:'audio/x-mpegurl'}));
+  a.download=name; a.click();
+}
+function dateStr(){return new Date().toISOString().slice(0,10);}
+function exportMyList() {
+  if(!myList.length){showToast('Your list is empty.');return;}
+  dl(buildM3U(myList),'my-iptv-'+dateStr()+'.m3u');
+  showToast(`Exported ${myList.length} channels.`);
+}
+function exportStarred() {
+  const s=myList.filter(c=>c.starred);
+  if(!s.length){showToast('No starred channels in your list.');return;}
+  dl(buildM3U(s),'starred-iptv-'+dateStr()+'.m3u');
+  showToast(`Exported ${s.length} starred channels.`);
+}
+
+// ── Import ──
+function importMyList(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const parsed = parseM3U(e.target.result);
+    if (!parsed.length) { showToast('No channels found in that file.'); return; }
+    let added = 0;
+    parsed.forEach(ch => {
+      if (!myList.find(m => m.url === ch.url)) { myList.push({...ch}); added++; }
+    });
+    save(); renderMyList(); updateStats();
+    showToast(added ? `Imported ${added} new channel${added > 1 ? 's' : ''} — ${parsed.length - added} already in list.` : 'All channels already in your list.');
+  };
+  reader.readAsText(file);
+  // reset so same file can be re-imported if needed
+  event.target.value = '';
+}
+
+// ── Host modal ──
+function openHostModal()  { $('modal-backdrop').classList.add('open'); }
+function closeHostModal() { $('modal-backdrop').classList.remove('open'); }
+function handleBackdropClick(e) { if(e.target===$('modal-backdrop'))closeHostModal(); }
+function copyLanUrl() {
+  const v=$('lan-url-input').value;
+  navigator.clipboard.writeText(v).then(()=>showToast('URL copied!')).catch(()=>showToast('Select and copy manually.'));
+}
+function copyRawM3U() {
+  if(!myList.length){showToast('Your list is empty.');return;}
+  navigator.clipboard.writeText(buildM3U(myList)).then(()=>showToast('Raw M3U copied to clipboard!')).catch(()=>showToast('Could not copy — try Export instead.'));
+}
+
+// ── Init ──
+loadMyList(); updateStats();
+document.addEventListener('DOMContentLoaded', () => {
+  $('opt-res')?.addEventListener('change', applyFilters);
+  $('opt-hide-geo')?.addEventListener('change', applyFilters);
+});
+</script>
+</body>
+</html>
