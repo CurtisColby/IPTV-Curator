@@ -188,7 +188,35 @@ button:disabled{opacity:.3;cursor:not-allowed;transform:none}
 .modal-close:active{transform:none}
 .divider{border:none;border-top:1px solid var(--border);margin:1rem 0}
 
-/* ── Empty state ── */
+/* ── EPG modal ── */
+.epg-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:150;display:none;align-items:center;justify-content:center}
+.epg-modal-backdrop.open{display:flex}
+.epg-modal{background:var(--s2);border:1px solid var(--border2);border-radius:12px;width:480px;max-width:calc(100vw - 2rem);max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
+.epg-modal-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0}
+.epg-modal-head h3{font-size:14px;font-weight:600;flex:1}
+.epg-modal-body{padding:14px 16px;overflow-y:auto;flex:1}
+.epg-modal-body p{font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.5}
+.epg-ch-name{font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)}
+.epg-input-row{display:flex;gap:6px;margin-bottom:10px}
+.epg-id-input{flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:12px;padding:0 10px;height:32px;outline:none;transition:border-color .15s}
+.epg-id-input:focus{border-color:var(--accent)}
+.epg-results{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto}
+.epg-result-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r);border:1px solid var(--border);cursor:pointer;transition:background .1s,border-color .1s}
+.epg-result-row:hover{background:var(--s3);border-color:var(--border2)}
+.epg-result-row.selected{background:var(--accent-bg);border-color:var(--accent-border)}
+.epg-result-logo{width:28px;height:28px;border-radius:5px;object-fit:contain;background:var(--s3);flex-shrink:0}
+.epg-result-name{flex:1;font-size:12px;font-weight:500;color:var(--text)}
+.epg-result-id{font-size:10px;color:var(--text3);font-family:var(--mono)}
+.epg-result-country{font-size:10px;color:var(--text3);background:var(--s3);border-radius:4px;padding:1px 5px;border:1px solid var(--border)}
+.epg-none{font-size:12px;color:var(--text3);padding:1rem;text-align:center}
+/* EPG indicator on mylist rows */
+.epg-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;cursor:pointer;title:'Set EPG ID'}
+.epg-dot.matched{background:var(--green);box-shadow:0 0 4px var(--green)}
+.epg-dot.unmatched{background:var(--border2)}
+.epg-dot:hover{opacity:.7}
+/* EPG status bar */
+.epg-status-bar{padding:5px 13px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text3);display:none;align-items:center;gap:6px;flex-shrink:0;background:var(--green-bg)}
+.epg-status-bar.visible{display:flex}
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:3rem 2rem;color:var(--text3)}
 .empty-state svg{width:38px;height:38px;opacity:.2}
 .empty-state p{font-size:12px}
@@ -352,10 +380,15 @@ button:disabled{opacity:.3;cursor:not-allowed;transform:none}
 
     <!-- Scrollable my list -->
     <div class="mylist-panel">
+      <div class="epg-status-bar" id="epg-status-bar">
+        <span id="epg-status-text">EPG not loaded</span>
+        <button class="btn-green btn-sm" style="margin-left:auto" onclick="matchAllEPG()">Auto-match all</button>
+      </div>
       <div class="mylist-header">
         <div class="mylist-title">My list</div>
         <div class="mylist-count" id="mylist-count">0</div>
-        <button class="btn-ghost btn-sm" style="margin-left:auto" onclick="clearMyList()">Clear</button>
+        <button class="btn-ghost btn-sm" onclick="loadEPGDatabase()" id="btn-load-epg" title="Load EPG database for channel ID matching" style="margin-left:auto">📡 Load EPG</button>
+        <button class="btn-ghost btn-sm" onclick="clearMyList()">Clear</button>
       </div>
       <div class="mylist-scroll" id="mylist-scroll">
         <div class="mylist-empty">Star ★ a channel or check ✓ + "+ My list" to add channels here</div>
@@ -436,6 +469,27 @@ python3 -m http.server 8765</pre>
       </div>
       <p>Copy the raw M3U text below and paste it directly into any IPTV app that accepts raw playlist text (some do under "Add as text" or "Paste M3U").</p>
       <button class="btn-ghost btn-sm" onclick="copyRawM3U()" style="margin-bottom:6px">Copy raw M3U to clipboard</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ EPG Match Modal ══ -->
+<div class="epg-modal-backdrop" id="epg-modal-backdrop" onclick="handleEpgBackdrop(event)">
+  <div class="epg-modal">
+    <div class="epg-modal-head">
+      <h3>Set EPG channel ID</h3>
+      <button class="modal-close" onclick="closeEpgModal()">✕</button>
+    </div>
+    <div class="epg-modal-body">
+      <div class="epg-ch-name" id="epg-ch-name"></div>
+      <p>Search for the matching channel in the iptv-org database. The EPG ID links your channel to guide data in NostalgiaTV.</p>
+      <div class="epg-input-row">
+        <input class="epg-id-input" id="epg-search-input" type="text" placeholder="Search channel name…" oninput="searchEPG(this.value)">
+        <button class="btn-ghost btn-sm" onclick="clearEpgId()" title="Remove EPG ID from this channel">Clear ID</button>
+      </div>
+      <div class="epg-results" id="epg-results">
+        <div class="epg-none">Load the EPG database first, then search</div>
+      </div>
     </div>
   </div>
 </div>
@@ -777,9 +831,13 @@ function renderMyList() {
     logo.onerror=function(){this.style.display='none';};
     const name=document.createElement('div'); name.className='mylist-name'; name.textContent=ch.name; name.title=ch.name;
     const star=document.createElement('span'); star.className='mylist-star'+(ch.starred?' starred':''); star.textContent='★';
+    const epgDot=document.createElement('div');
+    epgDot.className='epg-dot '+(ch.tvgId?'matched':'unmatched');
+    epgDot.title=ch.tvgId?`EPG: ${ch.tvgId} — click to change`:'No EPG ID — click to set';
+    epgDot.onclick=()=>openEpgModal(ch);
     const rm=document.createElement('button'); rm.className='mylist-remove'; rm.textContent='✕'; rm.title='Remove';
     rm.onclick=()=>removeFromList(ch.url);
-    row.appendChild(logo); row.appendChild(name); row.appendChild(star); row.appendChild(rm);
+    row.appendChild(logo); row.appendChild(name); row.appendChild(star); row.appendChild(epgDot); row.appendChild(rm);
     frag.appendChild(row);
   });
   scroll.appendChild(frag);
@@ -891,9 +949,175 @@ function excludeChannel() {
   showToast(`"${ch.name}" excluded.`);
 }
 
-// ── Export ──
+// ── EPG Database ──
+const EPG_URL = 'https://iptv-org.github.io/api/channels.json';
+const EPG_XML = 'https://iptv-org.github.io/epg/guides/us/tvtv.us.epg.xml.gz';
+let epgDb = [];       // full channel list from iptv-org
+let epgLoaded = false;
+let epgModalTarget = null; // which myList channel we're editing
+
+async function loadEPGDatabase() {
+  if (epgLoaded) { showToast('EPG database already loaded.'); openEpgStatusBar(); return; }
+  const btn = $('btn-load-epg');
+  btn.textContent = '⏳ Loading…'; btn.disabled = true;
+  try {
+    const res = await fetch(EPG_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    epgDb = await res.json();
+    epgLoaded = true;
+    btn.textContent = '📡 EPG loaded';
+    openEpgStatusBar();
+    matchAllEPG();
+  } catch(e) {
+    btn.textContent = '📡 Load EPG'; btn.disabled = false;
+    showToast('Could not load EPG database: ' + e.message, 4000);
+  }
+}
+
+function openEpgStatusBar() {
+  const bar = $('epg-status-bar');
+  bar.classList.add('visible');
+  updateEpgStatus();
+}
+
+function updateEpgStatus() {
+  if (!epgLoaded) return;
+  const matched = myList.filter(c => c.tvgId).length;
+  $('epg-status-text').textContent = `EPG loaded — ${matched}/${myList.length} channels matched`;
+}
+
+// Auto-match: normalize names and fuzzy-score against the DB
+function normName(s) {
+  return s.toLowerCase()
+    .replace(/\b(hd|fhd|4k|uhd|sd|us|uk|usa|the|\+)\b/g,'')
+    .replace(/[^a-z0-9]/g,'').trim();
+}
+
+function bestMatch(ch) {
+  if (!epgLoaded || !epgDb.length) return null;
+  const q = normName(ch.name);
+  if (!q) return null;
+  const country = ch.country?.toUpperCase() || '';
+  let best = null, bestScore = 0;
+  for (const entry of epgDb) {
+    const en = normName(entry.name);
+    if (!en) continue;
+    // exact normalized match
+    let score = en === q ? 100 : 0;
+    // starts-with or contains
+    if (!score && (en.startsWith(q) || q.startsWith(en))) score = 80;
+    if (!score && (en.includes(q) || q.includes(en))) score = 60;
+    if (!score) continue;
+    // boost for country match
+    if (country && entry.country?.toUpperCase() === country) score += 15;
+    if (score > bestScore) { bestScore = score; best = entry; }
+  }
+  return bestScore >= 60 ? best : null;
+}
+
+function matchAllEPG() {
+  if (!epgLoaded) { showToast('Load EPG database first.'); return; }
+  let matched = 0;
+  myList.forEach(ch => {
+    if (ch.tvgId) return; // don't overwrite manual
+    const m = bestMatch(ch);
+    if (m) { ch.tvgId = m.id; matched++; }
+  });
+  save(); renderMyList(); updateEpgStatus();
+  showToast(`Auto-matched ${matched} channel${matched !== 1 ? 's' : ''}.`);
+}
+
+// EPG modal
+function openEpgModal(ch) {
+  if (!epgLoaded) { showToast('Click "Load EPG" first to load the database.'); return; }
+  epgModalTarget = ch;
+  $('epg-ch-name').textContent = ch.name;
+  $('epg-search-input').value = ch.name;
+  $('epg-modal-backdrop').classList.add('open');
+  searchEPG(ch.name);
+  setTimeout(() => $('epg-search-input').focus(), 50);
+}
+
+function closeEpgModal() {
+  $('epg-modal-backdrop').classList.remove('open');
+  epgModalTarget = null;
+}
+
+function handleEpgBackdrop(e) {
+  if (e.target === $('epg-modal-backdrop')) closeEpgModal();
+}
+
+function searchEPG(q) {
+  const container = $('epg-results');
+  if (!epgLoaded) { container.innerHTML = '<div class="epg-none">Load EPG database first</div>'; return; }
+  const norm = normName(q);
+  if (!norm) { container.innerHTML = '<div class="epg-none">Type a channel name to search</div>'; return; }
+
+  const results = [];
+  for (const entry of epgDb) {
+    const en = normName(entry.name);
+    if (en.includes(norm) || norm.includes(en)) results.push(entry);
+    if (results.length >= 40) break;
+  }
+
+  if (!results.length) { container.innerHTML = '<div class="epg-none">No matches found — try a shorter name</div>'; return; }
+
+  container.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  results.forEach(entry => {
+    const row = document.createElement('div');
+    row.className = 'epg-result-row' + (epgModalTarget?.tvgId === entry.id ? ' selected' : '');
+    const logo = document.createElement('img');
+    logo.className = 'epg-result-logo'; logo.src = entry.logo || ''; logo.alt = '';
+    logo.onerror = function() { this.style.display='none'; };
+    const name = document.createElement('div'); name.className = 'epg-result-name'; name.textContent = entry.name;
+    const id = document.createElement('div'); id.className = 'epg-result-id'; id.textContent = entry.id;
+    const country = document.createElement('div'); country.className = 'epg-result-country'; country.textContent = entry.country || '?';
+    row.appendChild(logo); row.appendChild(name); row.appendChild(id); row.appendChild(country);
+    row.onclick = () => selectEpgId(entry);
+    frag.appendChild(row);
+  });
+  container.appendChild(frag);
+}
+
+function selectEpgId(entry) {
+  if (!epgModalTarget) return;
+  epgModalTarget.tvgId = entry.id;
+  // also update logo if channel has none
+  if (!epgModalTarget.logo && entry.logo) epgModalTarget.logo = entry.logo;
+  save(); renderMyList(); updateEpgStatus();
+  closeEpgModal();
+  showToast(`EPG ID set: ${entry.id}`);
+}
+
+function clearEpgId() {
+  if (!epgModalTarget) return;
+  epgModalTarget.tvgId = '';
+  save(); renderMyList(); updateEpgStatus();
+  closeEpgModal();
+  showToast('EPG ID cleared.');
+}
+
+// ── Export (EPG-aware) ──
+function buildExtInf(ch) {
+  // Rebuild the #EXTINF line with correct tvg-id injected
+  let line = ch.extinf || '';
+  const tvgId = ch.tvgId || '';
+  // Replace existing tvg-id or inject one
+  if (/tvg-id="[^"]*"/i.test(line)) {
+    line = line.replace(/tvg-id="[^"]*"/i, `tvg-id="${tvgId}"`);
+  } else {
+    line = line.replace('#EXTINF:-1', `#EXTINF:-1 tvg-id="${tvgId}"`);
+  }
+  return line;
+}
+
 function buildM3U(list) {
-  return '#EXTM3U\n'+list.map(ch=>ch.extinf+'\n'+ch.url).join('\n')+'\n';
+  const hasEpg = list.some(c => c.tvgId);
+  const header = hasEpg
+    ? `#EXTM3U url-tvg="${EPG_XML}" x-tvg-url="${EPG_XML}"\n`
+    : '#EXTM3U\n';
+  return header + list.map(ch => buildExtInf(ch) + '\n' + ch.url).join('\n') + '\n';
 }
 function dl(content,name) {
   const a=document.createElement('a');
@@ -926,10 +1150,11 @@ function importMyList(event) {
       if (!myList.find(m => m.url === ch.url)) { myList.push({...ch}); added++; }
     });
     save(); renderMyList(); updateStats();
+    // auto-match any newly imported channels if DB is loaded
+    if (epgLoaded) matchAllEPG();
     showToast(added ? `Imported ${added} new channel${added > 1 ? 's' : ''} — ${parsed.length - added} already in list.` : 'All channels already in your list.');
   };
   reader.readAsText(file);
-  // reset so same file can be re-imported if needed
   event.target.value = '';
 }
 
