@@ -486,7 +486,7 @@ button:disabled{opacity:.3;cursor:not-allowed;transform:none}
         <span class="badge badge-easy">Easiest</span>
       </div>
       <p>Since you already run a home server, drop the exported <code>.m3u</code> there and serve it with this one-liner. Your playlist will be available at a permanent local URL.</p>
-      <p><strong style="color:var(--text);font-size:12px">Step 1</strong> — Export your list (click "Export .m3u"), save it as <code>playlist.m3u</code> anywhere on the server.</p>
+      <p><strong style="color:var(--text);font-size:12px">Step 1</strong> — Export your list (click "Export .m3u"), save it as <code>playlist.m3u</code> anywhere on the server. Then run <code>epg_manager.py</code> to generate real EPG data.</p>
       <p><strong style="color:var(--text);font-size:12px">Step 2</strong> — Run this in that folder (Python is pre-installed on most Linux boxes):</p>
       <pre class="code-block">cd /path/to/your/playlist/folder
 python3 -m http.server 8765</pre>
@@ -1452,19 +1452,13 @@ function dateStr() { return new Date().toISOString().slice(0,10); }
 function exportMyList() {
   if (!myList.length) { showToast('Your list is empty.'); return; }
   dl(buildM3U(myList), 'playlist.m3u');
-  setTimeout(() => {
-    dlText(buildXMLTV(myList), 'epg.xml', 'application/xml');
-  }, 500);
-  showToast(`Exported playlist.m3u + epg.xml — upload both to your Gist.`);
+  showToast(`Exported playlist.m3u — run epg_manager.py to update EPG data.`);
 }
 function exportStarred() {
   const s = myList.filter(c => c.starred);
   if (!s.length) { showToast('No starred channels in your list.'); return; }
   dl(buildM3U(s), 'playlist.m3u');
-  setTimeout(() => {
-    dlText(buildXMLTV(s), 'epg.xml', 'application/xml');
-  }, 500);
-  showToast(`Exported ${s.length} starred channels + epg.xml.`);
+  showToast(`Exported ${s.length} starred channels as playlist.m3u.`);
 }
 
 // ── Import ──

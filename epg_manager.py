@@ -77,9 +77,12 @@ def download_url(url, timeout=120, is_gzip=False):
 def parse_xmltv(xml_text, source_label="unknown"):
     """Parse any XMLTV XML into channel dict and programme dict.
 
+    Extracts programme data as plain dicts (not Element references) to
+    prevent data loss from Element lifecycle/GC issues.
+
     Returns:
         channels:   {id: {id, name, icon, source}}
-        programmes: {channel_id: [ET.Element, ...]}
+        programmes: {channel_id: [dict, ...]}
     """
     root = ET.fromstring(xml_text)
 
@@ -97,8 +100,25 @@ def parse_xmltv(xml_text, source_label="unknown"):
     programmes = {}
     for prog_el in root.findall("programme"):
         ch_id = prog_el.get("channel", "")
-        if ch_id:
-            programmes.setdefault(ch_id, []).append(prog_el)
+        if not ch_id:
+            continue
+        # Extract all data as a plain dict NOW, don't keep Element refs
+        title_el = prog_el.find("title")
+        desc_el = prog_el.find("desc")
+        cat_el = prog_el.find("category")
+        icon_el = prog_el.find("icon")
+        episode_el = prog_el.find("episode-num")
+        prog = {
+            "start": prog_el.get("start", ""),
+            "stop": prog_el.get("stop", ""),
+            "title": title_el.text if title_el is not None and title_el.text else "",
+            "desc": desc_el.text if desc_el is not None and desc_el.text else "",
+            "category": cat_el.text if cat_el is not None and cat_el.text else "",
+            "icon": icon_el.get("src", "") if icon_el is not None else "",
+            "episode": episode_el.text if episode_el is not None and episode_el.text else "",
+            "episode_sys": episode_el.get("system", "") if episode_el is not None else "",
+        }
+        programmes.setdefault(ch_id, []).append(prog)
 
     return channels, programmes
 
@@ -242,27 +262,17 @@ def xmltv_date(dt):
 
 # ── EPG builder ──────────────────────────────────────────────────────────────
 
-def serialize_programme(prog_el, ch_id, fallback_name=""):
-    """Convert an ET programme element to XML string lines."""
+def serialize_programme(prog, ch_id, fallback_name=""):
+    """Convert a programme dict to XML string lines."""
     lines = []
-    start = prog_el.get("start", "")
-    stop = prog_el.get("stop", "")
-
-    title_el = prog_el.find("title")
-    title = title_el.text if title_el is not None and title_el.text else fallback_name
-
-    desc_el = prog_el.find("desc")
-    desc = desc_el.text if desc_el is not None and desc_el.text else ""
-
-    cat_el = prog_el.find("category")
-    category = cat_el.text if cat_el is not None and cat_el.text else ""
-
-    icon_el = prog_el.find("icon")
-    icon_src = icon_el.get("src", "") if icon_el is not None else ""
-
-    episode_el = prog_el.find("episode-num")
-    episode = episode_el.text if episode_el is not None and episode_el.text else ""
-    episode_sys = episode_el.get("system", "") if episode_el is not None else ""
+    start = prog["start"]
+    stop = prog["stop"]
+    title = prog["title"] or fallback_name
+    desc = prog["desc"]
+    category = prog["category"]
+    icon_src = prog["icon"]
+    episode = prog["episode"]
+    episode_sys = prog["episode_sys"]
 
     lines.append(f'  <programme start="{start}" stop="{stop}" channel="{xml_escape(ch_id)}">')
     lines.append(f'    <title lang="en">{xml_escape(title)}</title>')
@@ -281,7 +291,9 @@ def serialize_programme(prog_el, ch_id, fallback_name=""):
 def build_merged_epg(playlist_channels, all_programmes):
     """Build merged EPG XML: real data where IDs match any source, stubs otherwise.
 
-    all_programmes is a merged dict {channel_id: [ET.Element, ...]} from all sources.
+    all_programmes is a merged dict {channel_id: [dict, ...]} from all sources.
+    Tries both the exact tvg-id and a stripped version (without @variant suffix)
+    to handle iptv-org IDs like 'History.us@East' matching GlobeTV's 'History.us'.
     """
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -312,11 +324,18 @@ def build_merged_epg(playlist_channels, all_programmes):
 
     # Write programme blocks
     for ch_id, ch in seen_ids.items():
-        if ch_id in all_programmes and all_programmes[ch_id]:
-            # Real data from one of the sources
+        # Try exact ID first, then strip @variant suffix for iptv-org IDs
+        progs = all_programmes.get(ch_id)
+        if not progs and '@' in ch_id:
+            stripped = ch_id.split('@')[0]
+            progs = all_programmes.get(stripped)
+            if progs:
+                log(f"  Matched {ch_id} via stripped ID {stripped}")
+
+        if progs:
             matched += 1
-            for prog_el in all_programmes[ch_id]:
-                lines.extend(serialize_programme(prog_el, ch_id, ch["name"]))
+            for prog in progs:
+                lines.extend(serialize_programme(prog, ch_id, ch["name"]))
         else:
             # Stub data — channel name repeating every hour for STUB_DAYS
             stubbed += 1
