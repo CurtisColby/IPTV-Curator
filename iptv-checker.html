@@ -119,6 +119,8 @@ button:disabled{opacity:.3;cursor:not-allowed;transform:none}
 .ch-icon-btn:active{transform:scale(0.9)}
 .ch-icon-btn.play-btn:hover{background:var(--accent);border-color:var(--accent);color:#fff}
 .ch-icon-btn.play-btn.playing{background:var(--accent);border-color:var(--accent);color:#fff}
+.ch-icon-btn.copy-url-btn:hover{color:var(--green);border-color:var(--green-border);background:var(--green-bg)}
+.channel-scroll.drag-over{outline:2px dashed var(--accent);outline-offset:-4px;background:var(--accent-bg)}
 .ch-badge{font-size:10px;padding:2px 6px;border-radius:100px;font-weight:600;border:1px solid var(--border);color:var(--text3);flex-shrink:0;min-width:42px;text-align:center}
 .badge-live{background:var(--green-bg);color:var(--green);border-color:var(--green-border)}
 .badge-dead{background:var(--red-bg);color:var(--red);border-color:var(--red-border)}
@@ -163,6 +165,9 @@ button:disabled{opacity:.3;cursor:not-allowed;transform:none}
 .mylist-name{flex:1;font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mylist-star{font-size:11px;flex-shrink:0;color:var(--text3)}
 .mylist-star.starred{color:var(--amber)}
+.mylist-copy{background:none;border:1px solid var(--border);padding:0;width:22px;height:22px;border-radius:4px;color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.mylist-copy:hover{color:var(--green);border-color:var(--green-border);background:var(--green-bg)}
+.mylist-copy:active{transform:scale(0.9)}
 .mylist-remove{background:none;border:none;padding:2px 4px;height:auto;color:var(--text3);cursor:pointer;border-radius:3px;font-size:13px;line-height:1;flex-shrink:0}
 .mylist-remove:hover{color:var(--red)}
 .mylist-actions{padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap}
@@ -220,6 +225,32 @@ button:disabled{opacity:.3;cursor:not-allowed;transform:none}
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:3rem 2rem;color:var(--text3)}
 .empty-state svg{width:38px;height:38px;opacity:.2}
 .empty-state p{font-size:12px}
+
+/* ── EPG Sources panel ── */
+.epg-sources-panel{padding:6px 10px;border-bottom:1px solid var(--border);background:var(--s2);display:none;flex-direction:column;gap:5px}
+.epg-sources-panel.visible{display:flex}
+.epg-src-row{display:flex;align-items:center;gap:5px;font-size:11px}
+.epg-src-label{color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono);font-size:10px}
+.epg-src-badge{font-size:9px;padding:1px 5px;border-radius:100px;font-weight:600;border:1px solid var(--border)}
+.epg-src-badge.loaded{background:var(--green-bg);color:var(--green);border-color:var(--green-border)}
+.epg-src-badge.pending{color:var(--text3);border-color:var(--border)}
+.epg-src-count{font-size:10px;color:var(--text3)}
+.epg-src-rm{background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0 2px;height:auto;line-height:1}
+.epg-src-rm:hover{color:var(--red)}
+.epg-add-row{display:flex;gap:4px;align-items:center}
+.epg-add-input{flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text2);font-family:var(--mono);font-size:10px;padding:0 7px;height:24px;outline:none}
+.epg-add-input:focus{border-color:var(--accent)}
+.epg-add-input::placeholder{color:var(--text3)}
+/* Copy EPG info button */
+.mylist-epg-copy{background:none;border:1px solid var(--border);padding:0;width:22px;height:22px;border-radius:4px;color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;font-size:10px;font-weight:700}
+.mylist-epg-copy:hover{color:var(--accent);border-color:var(--accent-border);background:var(--accent-bg)}
+.mylist-epg-copy:active{transform:scale(0.9)}
+/* EPG source tag in modal */
+.epg-source-tag{font-size:9px;color:var(--text3);background:var(--s3);border:1px solid var(--border);border-radius:3px;padding:0 4px;margin-left:4px;white-space:nowrap}
+/* EPG URL field in modal */
+.epg-url-row{display:flex;gap:5px;align-items:center;margin-bottom:8px;padding:6px 8px;background:var(--s3);border-radius:var(--r);border:1px solid var(--border)}
+.epg-url-label{font-size:10px;color:var(--text3);flex-shrink:0}
+.epg-url-val{flex:1;font-size:10px;color:var(--text2);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ── Toast ── */
 .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%) translateY(8px);background:var(--s3);border:1px solid var(--border2);border-radius:var(--r);padding:7px 14px;font-size:12px;color:var(--text);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:200;white-space:nowrap}
@@ -303,6 +334,10 @@ button:disabled{opacity:.3;cursor:not-allowed;transform:none}
           <button class="btn-ghost" id="btn-stop" onclick="stopProcess()" disabled>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>Stop
           </button>
+          <button class="btn-ghost" onclick="$('file-browse').click()" title="Load a local .m3u / .m3u8 file">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>Browse
+          </button>
+          <input type="file" id="file-browse" accept=".m3u,.m3u8" style="display:none" onchange="loadFile(event)">
         </div>
         <div class="opts-row">
           <label class="ck-label"><input type="checkbox" id="opt-english" checked> English filter</label>
@@ -345,7 +380,7 @@ button:disabled{opacity:.3;cursor:not-allowed;transform:none}
     <div class="channel-scroll" id="channel-scroll">
       <div class="empty-state">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-        <p>Enter a playlist URL and hit Check</p>
+        <p>Enter a URL and hit Check — or Browse / drag-drop an .m3u file</p>
       </div>
     </div>
   </div><!-- /left-col -->
@@ -382,16 +417,41 @@ button:disabled{opacity:.3;cursor:not-allowed;transform:none}
     <div class="mylist-panel">
       <div class="epg-status-bar" id="epg-status-bar">
         <span id="epg-status-text">EPG not loaded</span>
-        <button class="btn-green btn-sm" style="margin-left:auto" onclick="matchAllEPG()">Auto-match all</button>
+        <button class="btn-ghost btn-sm" style="margin-left:auto" onclick="toggleSourcesPanel()">Sources</button>
+        <button class="btn-ghost btn-sm" onclick="resetAllEPG()">Reset IDs</button>
+        <button class="btn-green btn-sm" onclick="matchAllEPG()">Auto-match all</button>
+      </div>
+      <div class="epg-sources-panel" id="epg-sources-panel">
+        <div id="epg-sources-list"></div>
+        <div class="epg-add-row">
+          <input class="epg-add-input" id="epg-add-url" type="text" placeholder="Paste EPG channels JSON URL…">
+          <button class="btn-ghost btn-sm" onclick="addEpgSource()">Add</button>
+          <button class="btn-ghost btn-sm" onclick="loadAllEpgSources()">Load all</button>
+        </div>
       </div>
       <div class="mylist-header">
         <div class="mylist-title">My list</div>
         <div class="mylist-count" id="mylist-count">0</div>
-        <button class="btn-ghost btn-sm" onclick="loadEPGDatabase()" id="btn-load-epg" title="Load EPG database for channel ID matching" style="margin-left:auto">📡 Load EPG</button>
+        <button class="btn-ghost btn-sm" onclick="loadAllEpgSources()" id="btn-load-epg" title="Load all EPG sources for channel ID matching" style="margin-left:auto">📡 Load EPG</button>
         <button class="btn-ghost btn-sm" onclick="clearMyList()">Clear</button>
       </div>
       <div class="mylist-scroll" id="mylist-scroll">
         <div class="mylist-empty">Star ★ a channel or check ✓ + "+ My list" to add channels here</div>
+      </div>
+      <div class="mylist-actions" style="padding-bottom:4px;border-bottom:1px solid var(--border);margin-bottom:0;flex-direction:column;gap:5px">
+        <div style="display:flex;align-items:center;gap:6px;width:100%">
+          <span style="font-size:11px;color:var(--text3);flex-shrink:0">Start ch#</span>
+          <input id="ch-start-num" type="number" min="1" value="700"
+            style="width:70px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;padding:0 8px;height:26px;outline:none;font-variant-numeric:tabular-nums"
+            title="First channel number in the exported file — channels will be numbered sequentially from here">
+          <span style="font-size:11px;color:var(--text3);margin-left:auto">offset 0 in NostalgiaTV</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;width:100%">
+          <span style="font-size:11px;color:var(--text3);flex-shrink:0">EPG URL</span>
+          <input id="epg-url-input" type="text" value="http://192.168.50.42:8766/epg.xml"
+            style="flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-family:var(--mono);font-size:10px;padding:0 8px;height:26px;outline:none"
+            title="EPG/XMLTV URL written into the exported playlist header — your IPTV client reads this to fetch guide data">
+        </div>
       </div>
       <div class="mylist-actions">
         <button class="btn-green" style="flex:1" onclick="exportMyList()">
@@ -482,7 +542,12 @@ python3 -m http.server 8765</pre>
     </div>
     <div class="epg-modal-body">
       <div class="epg-ch-name" id="epg-ch-name"></div>
-      <p>Search for the matching channel in the iptv-org database. The EPG ID links your channel to guide data in NostalgiaTV.</p>
+      <p>Search for the matching channel across all loaded EPG sources. The EPG ID links your channel to guide data.</p>
+      <div class="epg-url-row" id="epg-url-row">
+        <span class="epg-url-label">EPG XML:</span>
+        <input class="epg-add-input" id="epg-ch-url" type="text" placeholder="EPG XML URL for this channel" style="flex:1;font-size:10px;height:22px">
+        <button class="btn-ghost btn-sm" onclick="copyChannelEpgInfo()" title="Copy EPG URL + Guide Channel ID">📋 Copy</button>
+      </div>
       <div class="epg-input-row">
         <input class="epg-id-input" id="epg-search-input" type="text" placeholder="Search channel name…" oninput="searchEPG(this.value)">
         <button class="btn-ghost btn-sm" onclick="clearEpgId()" title="Remove EPG ID from this channel">Clear ID</button>
@@ -552,6 +617,7 @@ function parseM3U(text) {
       const g = rx => { const m = l.match(rx); return m ? m[1] : ''; };
       cur = {
         name:     (l.match(/,(.+)$/) || [])[1]?.trim() || 'Unknown',
+        tvgId:    g(/tvg-id="([^"]+)"/i),
         language: g(/tvg-language="([^"]+)"/i),
         country:  g(/tvg-country="([^"]+)"/i),
         logo:     g(/tvg-logo="([^"]+)"/i),
@@ -646,6 +712,12 @@ function createRow(ch, idx) {
   pl.onclick = () => playChannel(ch,idx);
   acts.appendChild(pl);
 
+  // copy stream URL
+  const cp = document.createElement('button'); cp.className='ch-icon-btn copy-url-btn'; cp.title=ch.url;
+  cp.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+  cp.onclick=(e)=>{e.stopPropagation();navigator.clipboard.writeText(ch.url).then(()=>showToast(`Copied m3u8 URL for "${ch.name}"`)).catch(()=>showToast('Copy failed'));};
+  acts.appendChild(cp);
+
   // star — starring also adds to My List
   const st = document.createElement('button'); st.className='ch-star'+(ch.starred?' starred':''); st.id='star-'+idx; st.title='Star (also adds to My list)'; st.textContent='★';
   st.onclick = () => {
@@ -738,7 +810,7 @@ async function recheckOne(ch,idx) {
 
 async function startProcess() {
   const url = $('playlist-url').value.trim();
-  if (!url) { showToast('Enter a playlist URL first.'); return; }
+  if (!url || url.startsWith('(')) { showToast('Enter a playlist URL or use Browse to load a file.'); return; }
   stopped=false; liveCount=0; deadCount=0; checkedCount=0; channels=[];
   stopPlayer();
   $('btn-start').disabled=true; $('btn-stop').disabled=false;
@@ -835,9 +907,24 @@ function renderMyList() {
     epgDot.className='epg-dot '+(ch.tvgId?'matched':'unmatched');
     epgDot.title=ch.tvgId?`EPG: ${ch.tvgId} — click to change`:'No EPG ID — click to set';
     epgDot.onclick=()=>openEpgModal(ch);
+    const cp=document.createElement('button'); cp.className='mylist-copy'; cp.title='Copy stream URL: '+ch.url;
+    cp.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+    cp.onclick=(e)=>{e.stopPropagation();navigator.clipboard.writeText(ch.url).then(()=>showToast(`Copied stream URL for "${ch.name}"`)).catch(()=>showToast('Copy failed'));};
+    // Copy EPG info button
+    const epgCp=document.createElement('button'); epgCp.className='mylist-epg-copy';
+    epgCp.textContent='📡';
+    const chEpgUrl = ch.epgUrl || ($('epg-url-input')?.value?.trim()) || 'http://192.168.50.42:8766/epg.xml';
+    epgCp.title = ch.tvgId ? `Copy EPG info\nXML: ${chEpgUrl}\nID: ${ch.tvgId}` : 'No EPG ID set — click dot to assign';
+    epgCp.onclick=(e)=>{
+      e.stopPropagation();
+      if(!ch.tvgId){showToast('Set an EPG ID first (click the dot).');return;}
+      const eUrl = ch.epgUrl || ($('epg-url-input')?.value?.trim()) || 'http://192.168.50.42:8766/epg.xml';
+      const text = `EPG URL: ${eUrl}\nGuide Channel: ${ch.tvgId}\nStream URL: ${ch.url}`;
+      navigator.clipboard.writeText(text).then(()=>showToast(`Copied EPG info for "${ch.name}"`)).catch(()=>showToast('Copy failed'));
+    };
     const rm=document.createElement('button'); rm.className='mylist-remove'; rm.textContent='✕'; rm.title='Remove';
     rm.onclick=()=>removeFromList(ch.url);
-    row.appendChild(logo); row.appendChild(name); row.appendChild(star); row.appendChild(epgDot); row.appendChild(rm);
+    row.appendChild(logo); row.appendChild(name); row.appendChild(star); row.appendChild(cp); row.appendChild(epgCp); row.appendChild(epgDot); row.appendChild(rm);
     frag.appendChild(row);
   });
   scroll.appendChild(frag);
@@ -949,41 +1036,163 @@ function excludeChannel() {
   showToast(`"${ch.name}" excluded.`);
 }
 
-// ── EPG Database ──
-const EPG_URL = 'https://iptv-org.github.io/api/channels.json';
-const EPG_XML = 'https://iptv-org.github.io/epg/guides/us/tvtv.us.epg.xml.gz';
-let epgDb = [];       // full channel list from iptv-org
+// ── EPG Database (multi-source) ──
+const DEFAULT_EPG_SOURCE = {
+  url: 'http://192.168.50.42:8766/epgtalk-channels.json',
+  xmlUrl: 'http://192.168.50.42:8766/epg.xml',
+  label: 'EPGTalk (local)',
+  loaded: false,
+  count: 0,
+  channels: []
+};
+let epgSources = [];   // array of source objects
+let epgDb = [];        // merged channel list from all loaded sources
 let epgLoaded = false;
-let epgModalTarget = null; // which myList channel we're editing
+let epgModalTarget = null;
 
-async function loadEPGDatabase() {
-  if (epgLoaded) { showToast('EPG database already loaded.'); openEpgStatusBar(); return; }
-  const btn = $('btn-load-epg');
-  btn.textContent = '⏳ Loading…'; btn.disabled = true;
+function loadEpgSources() {
   try {
-    const res = await fetch(EPG_URL);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    epgDb = await res.json();
-    epgLoaded = true;
-    btn.textContent = '📡 EPG loaded';
-    openEpgStatusBar();
-    matchAllEPG();
+    const saved = JSON.parse(localStorage.getItem('iptv-epg-sources') || '[]');
+    if (saved.length) {
+      epgSources = saved.map(s => ({...s, loaded: false, count: 0, channels: []}));
+    } else {
+      epgSources = [{...DEFAULT_EPG_SOURCE}];
+    }
   } catch(e) {
-    btn.textContent = '📡 Load EPG'; btn.disabled = false;
-    showToast('Could not load EPG database: ' + e.message, 4000);
+    epgSources = [{...DEFAULT_EPG_SOURCE}];
+  }
+}
+function saveEpgSources() {
+  try {
+    const toSave = epgSources.map(s => ({url: s.url, xmlUrl: s.xmlUrl, label: s.label}));
+    localStorage.setItem('iptv-epg-sources', JSON.stringify(toSave));
+  } catch(e) {}
+}
+
+function addEpgSource() {
+  const input = $('epg-add-url');
+  const url = input.value.trim();
+  if (!url) { showToast('Paste an EPG channels JSON URL.'); return; }
+  if (epgSources.find(s => s.url === url)) { showToast('Source already added.'); return; }
+  // Try to derive a label from URL
+  let label = 'Custom';
+  try { label = new URL(url).hostname.replace('www.',''); } catch(e) {}
+  const xmlUrl = $('epg-url-input')?.value?.trim() || 'http://192.168.50.42:8766/epg.xml';
+  epgSources.push({url, xmlUrl, label, loaded: false, count: 0, channels: []});
+  saveEpgSources();
+  input.value = '';
+  renderEpgSources();
+  showToast('Source added — click "Load all" to fetch.');
+}
+
+function removeEpgSource(idx) {
+  epgSources.splice(idx, 1);
+  saveEpgSources();
+  rebuildEpgDb();
+  renderEpgSources();
+  updateEpgStatus();
+}
+
+async function loadOneEpgSource(src) {
+  try {
+    const res = await fetch(src.url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    // Normalize: each entry gets a _sourceUrl so we know which EPG XML it came from
+    src.channels = data.map(ch => ({...ch, _sourceUrl: src.url, _xmlUrl: src.xmlUrl}));
+    src.loaded = true;
+    src.count = data.length;
+    return true;
+  } catch(e) {
+    src.loaded = false;
+    src.count = 0;
+    src.channels = [];
+    return false;
   }
 }
 
+function rebuildEpgDb() {
+  // Merge all loaded sources, deduplicating by id (first source wins)
+  const seen = new Set();
+  epgDb = [];
+  for (const src of epgSources) {
+    for (const ch of src.channels) {
+      if (!seen.has(ch.id)) {
+        seen.add(ch.id);
+        epgDb.push(ch);
+      }
+    }
+  }
+  epgLoaded = epgDb.length > 0;
+}
+
+async function loadAllEpgSources() {
+  const btn = $('btn-load-epg');
+  btn.textContent = '⏳ Loading…'; btn.disabled = true;
+  let ok = 0, fail = 0;
+  for (const src of epgSources) {
+    const success = await loadOneEpgSource(src);
+    if (success) ok++; else fail++;
+  }
+  rebuildEpgDb();
+  btn.textContent = '📡 EPG loaded'; 
+  if (!epgLoaded) { btn.textContent = '📡 Load EPG'; btn.disabled = false; }
+  openEpgStatusBar();
+  renderEpgSources();
+  updateEpgStatus();
+  const msg = fail ? `Loaded ${ok} source${ok!==1?'s':''}, ${fail} failed.` : `Loaded ${epgDb.length} channels from ${ok} source${ok!==1?'s':''}.`;
+  showToast(msg);
+}
+
+function toggleSourcesPanel() {
+  const panel = $('epg-sources-panel');
+  panel.classList.toggle('visible');
+  if (panel.classList.contains('visible')) renderEpgSources();
+}
+
+function renderEpgSources() {
+  const list = $('epg-sources-list');
+  list.innerHTML = '';
+  if (!epgSources.length) {
+    list.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:4px 0">No EPG sources configured.</div>';
+    return;
+  }
+  epgSources.forEach((src, i) => {
+    const row = document.createElement('div');
+    row.className = 'epg-src-row';
+    const label = document.createElement('span');
+    label.className = 'epg-src-label';
+    label.textContent = src.label;
+    label.title = src.url;
+    const badge = document.createElement('span');
+    badge.className = 'epg-src-badge ' + (src.loaded ? 'loaded' : 'pending');
+    badge.textContent = src.loaded ? '✓' : '…';
+    const count = document.createElement('span');
+    count.className = 'epg-src-count';
+    count.textContent = src.loaded ? src.count + ' ch' : '';
+    const rm = document.createElement('button');
+    rm.className = 'epg-src-rm';
+    rm.textContent = '✕';
+    rm.title = 'Remove source';
+    rm.onclick = () => removeEpgSource(i);
+    row.appendChild(badge); row.appendChild(label); row.appendChild(count); row.appendChild(rm);
+    list.appendChild(row);
+  });
+}
+
 function openEpgStatusBar() {
-  const bar = $('epg-status-bar');
-  bar.classList.add('visible');
+  $('epg-status-bar').classList.add('visible');
   updateEpgStatus();
 }
 
 function updateEpgStatus() {
-  if (!epgLoaded) return;
   const matched = myList.filter(c => c.tvgId).length;
-  $('epg-status-text').textContent = `EPG loaded — ${matched}/${myList.length} channels matched`;
+  const srcCount = epgSources.filter(s => s.loaded).length;
+  if (epgLoaded) {
+    $('epg-status-text').textContent = `${epgDb.length} channels from ${srcCount} source${srcCount!==1?'s':''} — ${matched}/${myList.length} matched`;
+  } else {
+    $('epg-status-text').textContent = `EPG not loaded — ${epgSources.length} source${epgSources.length!==1?'s':''} configured`;
+  }
 }
 
 // Auto-match: normalize names and fuzzy-score against the DB
@@ -1002,26 +1211,34 @@ function bestMatch(ch) {
   for (const entry of epgDb) {
     const en = normName(entry.name);
     if (!en) continue;
-    // exact normalized match
     let score = en === q ? 100 : 0;
-    // starts-with or contains
     if (!score && (en.startsWith(q) || q.startsWith(en))) score = 80;
     if (!score && (en.includes(q) || q.includes(en))) score = 60;
     if (!score) continue;
-    // boost for country match
     if (country && entry.country?.toUpperCase() === country) score += 15;
     if (score > bestScore) { bestScore = score; best = entry; }
   }
   return bestScore >= 60 ? best : null;
 }
 
+function resetAllEPG() {
+  if (!epgLoaded) { showToast('Load EPG database first.'); return; }
+  if (!confirm('Reset all EPG IDs and re-run auto-match?')) return;
+  myList.forEach(ch => { ch.tvgId = ''; ch.epgUrl = ''; });
+  matchAllEPG();
+}
+
 function matchAllEPG() {
   if (!epgLoaded) { showToast('Load EPG database first.'); return; }
   let matched = 0;
   myList.forEach(ch => {
-    if (ch.tvgId) return; // don't overwrite manual
+    if (ch.tvgId) return; // don't overwrite manual picks
     const m = bestMatch(ch);
-    if (m) { ch.tvgId = m.id; matched++; }
+    if (m) {
+      ch.tvgId = m.id;
+      if (m._xmlUrl) ch.epgUrl = m._xmlUrl;
+      matched++;
+    }
   });
   save(); renderMyList(); updateEpgStatus();
   showToast(`Auto-matched ${matched} channel${matched !== 1 ? 's' : ''}.`);
@@ -1033,18 +1250,37 @@ function openEpgModal(ch) {
   epgModalTarget = ch;
   $('epg-ch-name').textContent = ch.name;
   $('epg-search-input').value = ch.name;
+  // Set per-channel EPG URL (default to the main one if not set)
+  const defaultXml = $('epg-url-input')?.value?.trim() || 'http://192.168.50.42:8766/epg.xml';
+  $('epg-ch-url').value = ch.epgUrl || defaultXml;
   $('epg-modal-backdrop').classList.add('open');
   searchEPG(ch.name);
   setTimeout(() => $('epg-search-input').focus(), 50);
 }
 
 function closeEpgModal() {
+  // Save per-channel EPG URL before closing
+  if (epgModalTarget) {
+    const urlVal = $('epg-ch-url').value.trim();
+    if (urlVal) epgModalTarget.epgUrl = urlVal;
+    save();
+  }
   $('epg-modal-backdrop').classList.remove('open');
   epgModalTarget = null;
 }
 
 function handleEpgBackdrop(e) {
   if (e.target === $('epg-modal-backdrop')) closeEpgModal();
+}
+
+function copyChannelEpgInfo() {
+  if (!epgModalTarget) return;
+  const epgUrl = $('epg-ch-url').value.trim();
+  const guideId = epgModalTarget.tvgId || '(not set)';
+  const text = `EPG URL: ${epgUrl}\nGuide Channel: ${guideId}`;
+  navigator.clipboard.writeText(text)
+    .then(() => showToast('Copied EPG URL + Guide Channel ID'))
+    .catch(() => showToast('Copy failed'));
 }
 
 function searchEPG(q) {
@@ -1071,9 +1307,17 @@ function searchEPG(q) {
     logo.className = 'epg-result-logo'; logo.src = entry.logo || ''; logo.alt = '';
     logo.onerror = function() { this.style.display='none'; };
     const name = document.createElement('div'); name.className = 'epg-result-name'; name.textContent = entry.name;
-    const id = document.createElement('div'); id.className = 'epg-result-id'; id.textContent = entry.id;
+    const idDiv = document.createElement('div'); idDiv.className = 'epg-result-id'; idDiv.textContent = entry.id;
+    // Show which source this entry came from
+    if (entry._xmlUrl) {
+      const srcTag = document.createElement('span');
+      srcTag.className = 'epg-source-tag';
+      const src = epgSources.find(s => s.url === entry._sourceUrl);
+      srcTag.textContent = src ? src.label : 'unknown';
+      idDiv.appendChild(srcTag);
+    }
     const country = document.createElement('div'); country.className = 'epg-result-country'; country.textContent = entry.country || '?';
-    row.appendChild(logo); row.appendChild(name); row.appendChild(id); row.appendChild(country);
+    row.appendChild(logo); row.appendChild(name); row.appendChild(idDiv); row.appendChild(country);
     row.onclick = () => selectEpgId(entry);
     frag.appendChild(row);
   });
@@ -1083,6 +1327,11 @@ function searchEPG(q) {
 function selectEpgId(entry) {
   if (!epgModalTarget) return;
   epgModalTarget.tvgId = entry.id;
+  // Store the EPG XML URL from this entry's source
+  if (entry._xmlUrl) {
+    epgModalTarget.epgUrl = entry._xmlUrl;
+    $('epg-ch-url').value = entry._xmlUrl;
+  }
   // also update logo if channel has none
   if (!epgModalTarget.logo && entry.logo) epgModalTarget.logo = entry.logo;
   save(); renderMyList(); updateEpgStatus();
@@ -1093,48 +1342,129 @@ function selectEpgId(entry) {
 function clearEpgId() {
   if (!epgModalTarget) return;
   epgModalTarget.tvgId = '';
+  epgModalTarget.epgUrl = '';
   save(); renderMyList(); updateEpgStatus();
   closeEpgModal();
   showToast('EPG ID cleared.');
 }
 
+// ── XMLTV / EPG XML builder ──
+function xmlEscape(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function xmltvDate(date) {
+  // Format: YYYYMMDDHHmmss +0000
+  const p = n => String(n).padStart(2,'0');
+  return `${date.getUTCFullYear()}${p(date.getUTCMonth()+1)}${p(date.getUTCDate())}${p(date.getUTCHours())}${p(date.getUTCMinutes())}${p(date.getUTCSeconds())} +0000`;
+}
+
+function buildXMLTV(list) {
+  const startNum = parseInt($('ch-start-num')?.value) || null;
+  const lines = ['<?xml version="1.0" encoding="UTF-8"?>','<!DOCTYPE tv SYSTEM "xmltv.dtd">','<tv generator-info-name="IPTV Curator">'];
+
+  // Build a map of id -> first channel entry to deduplicate
+  // Channels sharing the same tvgId get one <channel> block using the first occurrence
+  const seenIds = new Map(); // id -> {ch, chNo}
+  list.forEach((ch, i) => {
+    const id = ch.tvgId || `ch${startNum !== null ? startNum + i : i + 1}`;
+    const chNo = startNum !== null ? startNum + i : i + 1;
+    if (!seenIds.has(id)) seenIds.set(id, { ch, chNo });
+  });
+
+  // Write one <channel> block per unique id
+  seenIds.forEach(({ ch, chNo }, id) => {
+    lines.push(`  <channel id="${xmlEscape(id)}">`);
+    lines.push(`    <display-name>${xmlEscape(ch.name)}</display-name>`);
+    lines.push(`    <display-name>${chNo}</display-name>`);
+    if (ch.logo) lines.push(`    <icon src="${xmlEscape(ch.logo)}"/>`);
+    lines.push(`  </channel>`);
+  });
+
+  // Generate 7 days of stub programmes — 1 hour blocks
+  // Only one set of programmes per unique id (use first matched channel's name)
+  const now = new Date();
+  now.setUTCMinutes(0,0,0);
+  const DAYS = 7;
+  const HOURS = DAYS * 24;
+
+  seenIds.forEach(({ ch }, id) => {
+    const cleanName = ch.name.replace(/\s*\(.*?\)\s*/g,'').trim(); // strip (1080p) etc
+    for (let h = 0; h < HOURS; h++) {
+      const start = new Date(now.getTime() + h * 3600000);
+      const stop  = new Date(now.getTime() + (h+1) * 3600000);
+      lines.push(`  <programme start="${xmltvDate(start)}" stop="${xmltvDate(stop)}" channel="${xmlEscape(id)}">`);
+      lines.push(`    <title lang="en">${xmlEscape(cleanName)}</title>`);
+      lines.push(`    <desc lang="en">Live stream of ${xmlEscape(cleanName)}</desc>`);
+      if (ch.group && ch.group !== 'Undefined') lines.push(`    <category lang="en">${xmlEscape(ch.group)}</category>`);
+      lines.push(`  </programme>`);
+    }
+  });
+
+  lines.push('</tv>');
+  return lines.join('\n');
+}
+
+function dlText(content, name, mime) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], {type: mime}));
+  a.download = name; a.click();
+}
+
 // ── Export (EPG-aware) ──
-function buildExtInf(ch) {
-  // Rebuild the #EXTINF line with correct tvg-id injected
+function buildExtInf(ch, chNum) {
   let line = ch.extinf || '';
   const tvgId = ch.tvgId || '';
-  // Replace existing tvg-id or inject one
   if (/tvg-id="[^"]*"/i.test(line)) {
     line = line.replace(/tvg-id="[^"]*"/i, `tvg-id="${tvgId}"`);
   } else {
     line = line.replace('#EXTINF:-1', `#EXTINF:-1 tvg-id="${tvgId}"`);
+  }
+  if (chNum !== null) {
+    if (/tvg-chno="[^"]*"/i.test(line)) {
+      line = line.replace(/tvg-chno="[^"]*"/i, `tvg-chno="${chNum}"`);
+    } else {
+      line = line.replace('#EXTINF:-1', `#EXTINF:-1 tvg-chno="${chNum}"`);
+    }
   }
   return line;
 }
 
 function buildM3U(list) {
   const hasEpg = list.some(c => c.tvgId);
+  const epgUrl = $('epg-url-input')?.value?.trim() || EPG_XML;
   const header = hasEpg
-    ? `#EXTM3U url-tvg="${EPG_XML}" x-tvg-url="${EPG_XML}"\n`
+    ? `#EXTM3U url-tvg="${epgUrl}" x-tvg-url="${epgUrl}"\n`
     : '#EXTM3U\n';
-  return header + list.map(ch => buildExtInf(ch) + '\n' + ch.url).join('\n') + '\n';
+  const startNum = parseInt($('ch-start-num')?.value) || null;
+  return header + list.map((ch, i) => {
+    const chNum = startNum !== null ? startNum + i : null;
+    return buildExtInf(ch, chNum) + '\n' + ch.url;
+  }).join('\n') + '\n';
 }
-function dl(content,name) {
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([content],{type:'audio/x-mpegurl'}));
-  a.download=name; a.click();
+
+function dl(content, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], {type:'audio/x-mpegurl'}));
+  a.download = name; a.click();
 }
-function dateStr(){return new Date().toISOString().slice(0,10);}
+function dateStr() { return new Date().toISOString().slice(0,10); }
+
 function exportMyList() {
-  if(!myList.length){showToast('Your list is empty.');return;}
-  dl(buildM3U(myList),'my-iptv-'+dateStr()+'.m3u');
-  showToast(`Exported ${myList.length} channels.`);
+  if (!myList.length) { showToast('Your list is empty.'); return; }
+  dl(buildM3U(myList), 'playlist.m3u');
+  setTimeout(() => {
+    dlText(buildXMLTV(myList), 'epg.xml', 'application/xml');
+  }, 500);
+  showToast(`Exported playlist.m3u + epg.xml — upload both to your Gist.`);
 }
 function exportStarred() {
-  const s=myList.filter(c=>c.starred);
-  if(!s.length){showToast('No starred channels in your list.');return;}
-  dl(buildM3U(s),'starred-iptv-'+dateStr()+'.m3u');
-  showToast(`Exported ${s.length} starred channels.`);
+  const s = myList.filter(c => c.starred);
+  if (!s.length) { showToast('No starred channels in your list.'); return; }
+  dl(buildM3U(s), 'playlist.m3u');
+  setTimeout(() => {
+    dlText(buildXMLTV(s), 'epg.xml', 'application/xml');
+  }, 500);
+  showToast(`Exported ${s.length} starred channels + epg.xml.`);
 }
 
 // ── Import ──
@@ -1171,11 +1501,78 @@ function copyRawM3U() {
   navigator.clipboard.writeText(buildM3U(myList)).then(()=>showToast('Raw M3U copied to clipboard!')).catch(()=>showToast('Could not copy — try Export instead.'));
 }
 
+// ── Load from file (browse or drag-drop) ──
+function loadFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => loadFromText(e.target.result, file.name);
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function loadFromText(text, sourceName) {
+  stopped=false; liveCount=0; deadCount=0; checkedCount=0; channels=[];
+  stopPlayer();
+  $('btn-start').disabled=true; $('btn-stop').disabled=false;
+  $('toolbar').style.display='none';
+  $('prog-fill').style.width='0%';
+  $('playlist-url').value = '(loaded from file: ' + sourceName + ')';
+  updateStats();
+
+  const parsed = parseM3U(text);
+  const filterEn = $('opt-english').checked;
+  channels = filterEn ? parsed.filter(isEnglish) : parsed;
+  $('filter-notice').style.display = filterEn ? 'flex' : 'none';
+  updateStats(); renderChannels(); $('toolbar').style.display='flex';
+
+  showToast(`Loaded ${channels.length} channels from ${sourceName}` + (filterEn ? ` (${parsed.length} before filter)` : ''));
+
+  // auto-start checking
+  const concurrency = parseInt($('opt-concurrency').value);
+  let idx = 0;
+  async function worker() {
+    while (idx < channels.length && !stopped) {
+      const i = idx++, ch = channels[i];
+      const badge = $('badge-'+i);
+      if (badge) { badge.textContent='…'; badge.className='ch-badge badge-checking'; }
+      const ok = await checkOne(ch);
+      checkedCount++;
+      if (ok) liveCount++; else deadCount++;
+      $('prog-fill').style.width = Math.round(checkedCount/channels.length*100) + '%';
+      $('hs-live').textContent = liveCount + ' live';
+      if (badge) {
+        const isGeo = ch.status==='geo';
+        badge.textContent = ok ? '● Live' : isGeo ? '🚫 Geo' : '✕ Dead';
+        badge.className = 'ch-badge ' + (ok ? 'badge-live' : isGeo ? 'badge-geo' : 'badge-dead');
+      }
+    }
+  }
+  Promise.all(Array.from({length:concurrency}, worker)).then(() => {
+    $('btn-start').disabled=false; $('btn-stop').disabled=true;
+    showToast(stopped ? `Stopped — ${liveCount} live so far` : `Done — ${liveCount} live out of ${channels.length}`);
+  });
+}
+
 // ── Init ──
+loadEpgSources();
 loadMyList(); updateStats();
 document.addEventListener('DOMContentLoaded', () => {
   $('opt-res')?.addEventListener('change', applyFilters);
   $('opt-hide-geo')?.addEventListener('change', applyFilters);
+
+  // Drag-and-drop on channel list area
+  const dropZone = $('channel-scroll');
+  ['dragenter','dragover'].forEach(evt => dropZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('drag-over'); }));
+  ['dragleave','drop'].forEach(evt => dropZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('drag-over'); }));
+  dropZone.addEventListener('drop', e => {
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (!file.name.match(/\.m3u8?$/i)) { showToast('Drop an .m3u or .m3u8 file'); return; }
+    const reader = new FileReader();
+    reader.onload = ev => loadFromText(ev.target.result, file.name);
+    reader.readAsText(file);
+  });
 });
 </script>
 </body>
