@@ -1,1 +1,9 @@
-
+# personal data: lists, guides, backups
+data/
+*.backup*/
+app.backup*/
+data.backup*/
+__pycache__/
+*.pyc
+*.tmp
+.env
