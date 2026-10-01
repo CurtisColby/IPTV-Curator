@@ -1,0 +1,2771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IPTV Curator</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0c;--s1:#111114;--s2:#18181c;--s3:#202025;
+  --border:#2a2a30;--border2:#3a3a42;
+  --text:#e8e8ec;--text2:#9898a8;--text3:#5a5a6a;
+  --accent:#7c6af7;--accent-bg:#1a1830;--accent-border:#3d3478;
+  --green:#34d87a;--green-bg:#0d2518;--green-border:#1a4d2e;
+  --red:#f25c5c;--red-bg:#220f0f;--red-border:#4d1a1a;
+  --amber:#f5a623;--amber-bg:#251a06;--amber-border:#4d3510;
+  --r:8px;--mono:'JetBrains Mono','Fira Code',ui-monospace,monospace;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+
+/* ── Root layout: left list | right panel, both full-height, no page scroll ── */
+.layout{display:grid;grid-template-columns:minmax(380px,1fr) 6px var(--right-w,46vw);flex:1;min-height:0;overflow:hidden}
+/* draggable divider between the two sides */
+.col-divider{cursor:col-resize;background:var(--border);position:relative;transition:background .15s}
+.col-divider:hover,.col-divider.dragging{background:var(--accent)}
+.col-divider::after{content:'⋮';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--text3);font-size:14px;pointer-events:none}
+body.resizing{cursor:col-resize;user-select:none}
+body.resizing iframe,body.resizing video{pointer-events:none}
+
+/* ── Steps strip ── */
+.steps{display:flex;gap:4px;padding:6px 10px;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto}
+.step{display:flex;align-items:center;gap:8px;padding:5px 12px 5px 6px;border-radius:8px;border:1px solid var(--border);background:var(--s2);cursor:pointer;flex:1;min-width:150px;text-align:left;color:var(--text2);font-family:inherit}
+.step:hover{border-color:var(--border2);background:var(--s3)}
+.step-num{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:var(--s3);border:1px solid var(--border2);flex-shrink:0}
+.step-text{display:flex;flex-direction:column;min-width:0}
+.step-title{font-size:12px;font-weight:600;color:var(--text)}
+.step-sub{font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.step.done .step-num{background:var(--green-bg);border-color:var(--green-border);color:var(--green)}
+.step.current{border-color:var(--accent-border);background:var(--accent-bg)}
+.step.current .step-num{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ── collapsible player ── */
+.player-toggle{float:right;margin-left:8px}
+.right-col.player-collapsed .player-wrap,
+.right-col.player-collapsed .player-status-bar,
+.right-col.player-collapsed .audio-label,
+.right-col.player-collapsed .audio-tracks{display:none!important}
+.guide-now{font-size:11px;color:var(--text2);margin-top:4px;line-height:1.4}
+.guide-now b{color:var(--text)}
+
+/* ── My List toolbar ── */
+.ml-bar{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:7px;flex-shrink:0}
+.ml-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ml-title{font-size:14px;font-weight:700}
+.ml-chip{font-size:11px;padding:3px 10px;border-radius:100px;border:1px solid var(--border);background:var(--s2);color:var(--text2);cursor:pointer;font-family:inherit}
+.ml-chip.active{background:var(--accent-bg);border-color:var(--accent-border);color:var(--text)}
+.ml-chip .n{font-weight:700;margin-left:4px}
+.ml-hint{font-size:10px;color:var(--text3)}
+.mylist-name{cursor:pointer}
+.mylist-name:hover{text-decoration:underline}
+
+/* ── Left view tabs + Discover ── */
+.view-tabs{display:flex;gap:6px;padding:8px 12px 0;border-bottom:1px solid var(--border);background:var(--s1)}
+.vtab{padding:8px 14px;border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0;background:var(--s2);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:-1px}
+.vtab.active{background:var(--bg);color:var(--text);border-color:var(--border2)}
+.vbadge{display:inline-block;min-width:18px;padding:0 6px;margin-left:6px;border-radius:100px;background:var(--accent);color:#fff;font-size:10px;line-height:16px}
+.vbadge:empty{display:none}
+.left-col.discover-on .scan-only{display:none!important}
+.disc-view{display:none;flex-direction:column;flex:1;min-height:0}
+.left-col.discover-on .disc-view{display:flex}
+.disc-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.disc-status{flex:1;min-width:200px;font-size:12px;color:var(--text2);line-height:1.45}
+.disc-filters{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.disc-filters select{background:var(--s2);border:1px solid var(--border);color:var(--text2);border-radius:6px;height:26px;font-size:11px;padding:0 6px;max-width:190px}
+.disc-bulk{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text3)}
+.disc-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--r);border:1px solid transparent;margin-bottom:2px}
+.disc-row:hover{background:var(--s2);border-color:var(--border)}
+.disc-main{flex:1;min-width:0}
+.disc-name{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.disc-meta{font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.disc-meta .ok{color:var(--green)} .disc-meta .maybe{color:var(--amber)}
+.disc-new{font-size:9px;font-weight:700;color:var(--accent);margin-left:6px}
+.mylist-replace{font-size:10px;font-weight:600;padding:0 8px;height:22px;border-radius:100px;border:1px solid var(--amber-border);background:var(--amber-bg);color:var(--amber);cursor:pointer;flex-shrink:0;font-family:inherit}
+
+/* ── Guide sources window ── */
+.gs-row{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:5px;font-size:12px}
+.gs-row input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
+.gs-main{flex:1;min-width:0}
+.gs-label{font-weight:600}
+.gs-status{font-size:10px;color:var(--text3)}
+.gs-status.bad{color:var(--red)}
+.gs-kind{font-size:9px;padding:1px 6px;border-radius:100px;border:1px solid var(--border);color:var(--text3)}
+.gs-kind.fast{color:var(--amber);border-color:var(--amber-border)}
+.cand-now{font-size:10px;color:var(--text3);display:block;margin-top:2px}
+.left-col{display:flex;flex-direction:column;border-right:1px solid var(--border);min-height:0;overflow:hidden}
+.right-col{display:flex;flex-direction:column;background:var(--s1);min-height:0;overflow:hidden}
+
+/* ── Left: fixed top controls, scrollable list ── */
+.left-fixed{flex-shrink:0}
+.channel-scroll{flex:1;overflow-y:auto;padding:6px 8px;min-height:0}
+.channel-scroll::-webkit-scrollbar{width:5px}
+.channel-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* ── Right: sticky player top, scrollable mylist bottom ── */
+.player-sticky{flex-shrink:0}
+.mylist-panel{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.mylist-scroll{flex:1;overflow-y:auto;padding:6px 8px;min-height:0}
+.mylist-scroll::-webkit-scrollbar{width:4px}
+.mylist-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ── Header ── */
+.app-header{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--s1)}
+.app-logo{width:28px;height:28px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.app-logo svg{width:15px;height:15px;fill:#fff}
+.app-title{font-size:13px;font-weight:600;letter-spacing:-0.2px}
+.app-sub{font-size:10px;color:var(--text3);margin-top:1px}
+.header-stats{display:flex;gap:4px;margin-left:auto;align-items:center;flex-wrap:wrap}
+
+/* ── Profile switcher ── */
+.profile-switch{display:flex;align-items:center;gap:6px;margin-left:18px;padding-left:18px;border-left:1px solid var(--border)}
+.profile-label{font-size:10px;color:var(--text3);font-weight:600}
+.profile-switch select{background:var(--s3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;font-weight:600;padding:3px 8px;outline:none;cursor:pointer}
+
+/* ── Three-color EPG dots (recolored from last rebuild) ── */
+
+/* ── Confidence score pill in match modal ── */
+.cand-score{font-size:10px;font-weight:700;padding:1px 7px;border-radius:100px;margin-left:auto;flex-shrink:0;font-variant-numeric:tabular-nums}
+.cand-score.hi{color:var(--green);background:var(--green-bg);border:1px solid var(--green-border)}
+.cand-score.mid{color:var(--amber);background:var(--amber-bg);border:1px solid var(--amber-border)}
+.cand-score.lo{color:var(--text2);background:var(--s3);border:1px solid var(--border)}
+.cand-warn{font-size:11px;color:var(--amber);padding:6px 2px}
+.hstat{font-size:11px;padding:2px 8px;border-radius:100px;font-weight:600;font-variant-numeric:tabular-nums;border:1px solid var(--border);color:var(--text2)}
+.hstat.s-live{background:var(--green-bg);color:var(--green);border-color:var(--green-border)}
+.hstat.s-checked{color:var(--accent);background:var(--accent-bg);border-color:var(--accent-border)}
+.hstat.s-star{color:var(--amber);background:var(--amber-bg);border-color:var(--amber-border)}
+
+/* ── Input bar ── */
+.input-bar{padding:9px 13px;border-bottom:1px solid var(--border);background:var(--s1)}
+.input-row{display:flex;gap:6px;align-items:center}
+.url-input{flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:11px;padding:0 10px;height:32px;outline:none;transition:border-color .15s}
+.url-input:focus{border-color:var(--accent)}
+.url-input::placeholder{color:var(--text3)}
+.opts-row{display:flex;gap:10px;margin-top:7px;align-items:center;flex-wrap:wrap}
+.ck-label{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);cursor:pointer;user-select:none}
+.ck-label input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:pointer}
+.sel-wrap{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)}
+.sel-wrap select{background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:11px;padding:2px 5px;outline:none;cursor:pointer}
+
+/* ── Buttons ── */
+button{height:32px;padding:0 12px;border-radius:var(--r);font-size:12px;font-weight:500;cursor:pointer;border:none;transition:opacity .15s,transform .1s;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+button:active{transform:scale(0.97)}
+button:disabled{opacity:.3;cursor:not-allowed;transform:none}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover:not(:disabled){opacity:.85}
+.btn-ghost{background:var(--s3);color:var(--text2);border:1px solid var(--border)}
+.btn-ghost:hover:not(:disabled){color:var(--text);border-color:var(--border2)}
+.btn-green{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.btn-green:hover:not(:disabled){opacity:.8}
+.btn-amber{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
+.btn-amber:hover:not(:disabled){opacity:.8}
+.btn-red{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.btn-red:hover:not(:disabled){opacity:.8}
+.btn-sm{height:26px;padding:0 9px;font-size:11px}
+.btn-xs{height:22px;padding:0 6px;font-size:11px;line-height:1}
+
+/* ── Endpoints panel ── */
+.endpoints-panel{padding:8px 12px;border-bottom:1px solid var(--border);background:var(--s2);display:flex;flex-direction:column;gap:5px}
+.ep-row{display:flex;align-items:center;gap:6px}
+.ep-label{font-size:10px;color:var(--text2);width:56px;flex-shrink:0;font-weight:600}
+.ep-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--text3)}
+.ep-dot.ok{background:var(--green);box-shadow:0 0 6px var(--green-border)}
+.ep-dot.stale{background:var(--amber)}
+.ep-dot.bad{background:var(--red)}
+.ep-url{flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text2);font-family:var(--mono);font-size:10px;padding:0 7px;height:24px;outline:none}
+.ep-meta{font-size:10px;color:var(--text3);font-variant-numeric:tabular-nums}
+
+/* ── Retest status pill on My List rows ── */
+.mylist-teststate{font-size:9px;padding:1px 6px;border-radius:100px;font-weight:600;flex-shrink:0;border:1px solid var(--border)}
+.mylist-teststate.testing{color:var(--text2);background:var(--s3)}
+.mylist-teststate.live{color:var(--green);background:var(--green-bg);border-color:var(--green-border)}
+.mylist-teststate.dead{color:var(--red);background:var(--red-bg);border-color:var(--red-border)}
+.mylist-retest{background:var(--s3);border:1px solid var(--border);color:var(--text2);border-radius:5px;height:22px;width:24px;padding:0;font-size:11px;cursor:pointer;flex-shrink:0}
+.mylist-retest:hover{color:var(--text);border-color:var(--border2)}
+
+/* ── Progress ── */
+.progress-bar-wrap{height:3px;background:var(--s2)}
+.progress-bar-fill{height:100%;background:var(--accent);width:0%;transition:width .15s}
+
+/* ── Filter notice ── */
+.filter-notice{padding:5px 13px;background:var(--amber-bg);border-bottom:1px solid var(--amber-border);font-size:11px;color:var(--amber);display:none;align-items:center;gap:5px}
+
+/* ── Toolbar ── */
+.toolbar{padding:6px 12px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;background:var(--s1);flex-wrap:wrap}
+.search-input{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-size:11px;padding:0 9px;height:26px;outline:none;width:150px;transition:border-color .15s}
+.search-input:focus{border-color:var(--accent)}
+.search-input::placeholder{color:var(--text3)}
+.filter-tabs{display:flex;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.ftab{height:26px;padding:0 10px;background:var(--s2);color:var(--text3);border:none;font-size:11px;border-radius:0;cursor:pointer;transition:background .1s,color .1s}
+.ftab:active{transform:none}
+.ftab+.ftab{border-left:1px solid var(--border)}
+.ftab.active{background:var(--s3);color:var(--text)}
+.toolbar-right{margin-left:auto;display:flex;gap:5px;align-items:center}
+.sel-count{font-size:11px;color:var(--text3)}
+
+/* ── Channel rows ── */
+.ch-row{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:var(--r);border:1px solid transparent;margin-bottom:2px;transition:background .1s,border-color .1s}
+.ch-row:hover{background:var(--s2);border-color:var(--border)}
+.ch-row.playing{background:var(--accent-bg);border-color:var(--accent-border)}
+.ch-row.hidden{display:none}
+.ch-row.eng-override{border-left:2px solid var(--green)}
+.ch-cb{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+.ch-logo{width:24px;height:24px;border-radius:5px;object-fit:contain;background:var(--s3);flex-shrink:0;border:1px solid var(--border)}
+.ch-logo-ph{width:24px;height:24px;border-radius:5px;background:var(--s3);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:8px;font-weight:700;border:1px solid var(--border)}
+.ch-info{flex:1;min-width:0}
+.ch-name{font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-meta{font-size:10px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-actions{display:flex;align-items:center;gap:3px;flex-shrink:0}
+.ch-star{background:none;border:none;padding:2px;height:auto;color:var(--text3);font-size:16px;cursor:pointer;border-radius:4px;transition:color .15s;line-height:1}
+.ch-star:active{transform:scale(0.9)}
+.ch-star.starred{color:var(--amber)}
+.ch-icon-btn{background:none;border:1px solid var(--border2);padding:0;width:24px;height:24px;border-radius:5px;color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.ch-icon-btn:hover{color:var(--text);background:var(--s3)}
+.ch-icon-btn:active{transform:scale(0.9)}
+.ch-icon-btn.play-btn:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+.ch-icon-btn.play-btn.playing{background:var(--accent);border-color:var(--accent);color:#fff}
+.ch-icon-btn.copy-url-btn:hover{color:var(--green);border-color:var(--green-border);background:var(--green-bg)}
+.channel-scroll.drag-over{outline:2px dashed var(--accent);outline-offset:-4px;background:var(--accent-bg)}
+.ch-badge{font-size:10px;padding:2px 6px;border-radius:100px;font-weight:600;border:1px solid var(--border);color:var(--text3);flex-shrink:0;min-width:42px;text-align:center}
+.badge-live{background:var(--green-bg);color:var(--green);border-color:var(--green-border)}
+.badge-dead{background:var(--red-bg);color:var(--red);border-color:var(--red-border)}
+.badge-checking{color:var(--text3);animation:pulse 1s infinite}
+.badge-geo{background:#1a1030;color:#a855f7;border-color:#5b21b6}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+/* ── Player (sticky top of right col) ── */
+.player-header{padding:9px 13px;border-bottom:1px solid var(--border)}
+.player-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.player-meta{font-size:10px;color:var(--text3);margin-top:2px}
+.audio-label{font-size:10px;color:var(--text3);margin-top:5px;display:none}
+.audio-tracks{display:flex;gap:3px;flex-wrap:wrap;margin-top:3px}
+.audio-pill{font-size:10px;padding:2px 7px;border-radius:100px;border:1px solid var(--border2);color:var(--text2);background:var(--s3);cursor:pointer;transition:all .15s;font-weight:500}
+.audio-pill:hover{border-color:var(--accent);color:var(--accent)}
+.audio-pill.active{background:var(--accent-bg);border-color:var(--accent-border);color:var(--accent)}
+.audio-pill.eng{background:var(--green-bg);border-color:var(--green-border);color:var(--green)}
+.audio-pill.eng.active{box-shadow:0 0 0 1px var(--green)}
+
+.player-wrap{position:relative;background:#000;height:clamp(150px,26vh,300px)}
+#player-video{object-fit:contain;background:#000}
+#player-video{position:absolute;top:0;left:0;width:100%;height:100%}
+.player-idle{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--text3);pointer-events:none}
+.player-idle svg{width:30px;height:30px;opacity:.2}
+.player-idle p{font-size:11px}
+
+.player-status-bar{padding:6px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.player-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);flex-shrink:0}
+.player-dot.live{background:var(--green);box-shadow:0 0 5px var(--green)}
+.player-dot.error{background:var(--red)}
+.player-status-text{font-size:11px;color:var(--text3);flex:1}
+.player-action-btns{display:flex;gap:4px;margin-left:auto}
+
+/* ── My list ── */
+.mylist-header{padding:7px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;flex-shrink:0}
+.mylist-title{font-size:12px;font-weight:600}
+.mylist-count{font-size:10px;color:var(--text3);background:var(--s3);border-radius:100px;padding:1px 7px;border:1px solid var(--border)}
+.mylist-empty{padding:1.2rem;text-align:center;color:var(--text3);font-size:11px;line-height:1.6}
+.mylist-row{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:6px;margin-bottom:2px;border:1px solid transparent}
+.mylist-row:hover{background:var(--s2);border-color:var(--border)}
+.mylist-logo{width:20px;height:20px;border-radius:4px;object-fit:contain;background:var(--s3);flex-shrink:0}
+.mylist-name{flex:1;font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mylist-star{font-size:11px;flex-shrink:0;color:var(--text3)}
+.mylist-star.starred{color:var(--amber)}
+.mylist-copy{background:none;border:1px solid var(--border);padding:0;width:22px;height:22px;border-radius:4px;color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.mylist-copy:hover{color:var(--green);border-color:var(--green-border);background:var(--green-bg)}
+.mylist-copy:active{transform:scale(0.9)}
+.mylist-remove{background:none;border:none;padding:2px 4px;height:auto;color:var(--text3);cursor:pointer;border-radius:3px;font-size:13px;line-height:1;flex-shrink:0}
+.mylist-remove:hover{color:var(--red)}
+.mylist-actions{padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap}
+
+/* ── Host modal ── */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:center;justify-content:center}
+.modal-backdrop.open{display:flex}
+.modal{background:var(--s2);border:1px solid var(--border2);border-radius:12px;width:520px;max-width:calc(100vw - 2rem);max-height:calc(100vh - 2rem);overflow-y:auto;padding:1.25rem}
+.modal h2{font-size:15px;font-weight:600;margin-bottom:4px}
+.modal-sub{font-size:12px;color:var(--text3);margin-bottom:1rem}
+.modal-section{margin-bottom:1.1rem}
+.modal-section-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.modal-section-title .badge{font-size:10px;padding:1px 7px;border-radius:100px;font-weight:500;text-transform:none;letter-spacing:0}
+.badge-easy{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.badge-ext{background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-border)}
+.modal p{font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:8px}
+.modal code,.modal pre{font-family:var(--mono);font-size:11px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--green);padding:2px 7px;display:inline}
+.code-block{display:block;padding:10px 13px;white-space:pre;overflow-x:auto;margin:6px 0;line-height:1.5}
+.copy-row{display:flex;align-items:center;gap:6px;margin-top:4px}
+.copy-input{flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-family:var(--mono);font-size:11px;padding:5px 9px;outline:none}
+.modal-close{float:right;background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0;height:auto;line-height:1}
+.modal-close:hover{color:var(--text)}
+.modal-close:active{transform:none}
+.divider{border:none;border-top:1px solid var(--border);margin:1rem 0}
+
+/* ── EPG modal ── */
+.epg-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:150;display:none;align-items:center;justify-content:center}
+.epg-modal-backdrop.open{display:flex}
+.epg-modal{background:var(--s2);border:1px solid var(--border2);border-radius:12px;width:480px;max-width:calc(100vw - 2rem);max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
+.epg-modal-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0}
+.epg-modal-head h3{font-size:14px;font-weight:600;flex:1}
+.epg-modal-body{padding:14px 16px;overflow-y:auto;flex:1}
+.epg-modal-body p{font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.5}
+.epg-ch-name{font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)}
+.epg-input-row{display:flex;gap:6px;margin-bottom:10px}
+.epg-id-input{flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:12px;padding:0 10px;height:32px;outline:none;transition:border-color .15s}
+.epg-id-input:focus{border-color:var(--accent)}
+.epg-results{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto}
+.epg-result-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r);border:1px solid var(--border);cursor:pointer;transition:background .1s,border-color .1s}
+.epg-result-row:hover{background:var(--s3);border-color:var(--border2)}
+.epg-result-row.selected{background:var(--accent-bg);border-color:var(--accent-border)}
+.epg-result-logo{width:28px;height:28px;border-radius:5px;object-fit:contain;background:var(--s3);flex-shrink:0}
+.epg-result-name{flex:1;font-size:12px;font-weight:500;color:var(--text)}
+.epg-result-id{font-size:10px;color:var(--text3);font-family:var(--mono)}
+.epg-result-country{font-size:10px;color:var(--text3);background:var(--s3);border-radius:4px;padding:1px 5px;border:1px solid var(--border)}
+.epg-none{font-size:12px;color:var(--text3);padding:1rem;text-align:center}
+/* EPG indicator on mylist rows */
+.mylist-row .guide-pill,.guide-pill{font-size:9px;font-weight:600;height:20px;line-height:18px;padding:0 7px;border-radius:100px;flex-shrink:0;cursor:pointer;white-space:nowrap;border:1px solid var(--border);background:var(--s3);color:var(--text3);min-width:62px;width:auto;text-align:center;font-family:inherit;display:inline-block}
+.mylist-teststate:empty{display:none}
+.guide-pill:hover{filter:brightness(1.25)}
+.guide-pill.ok{color:var(--green);background:var(--green-bg);border-color:var(--green-border)}
+.guide-pill.expired,.guide-pill.suggest{color:var(--amber);background:var(--amber-bg);border-color:var(--amber-border)}
+.guide-pill.none{color:var(--text2)}
+.guide-pill.pending{border-style:dashed;background:none}
+.sugg-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px;font-size:12px}
+.sugg-row .sugg-text{flex:1;min-width:0;line-height:1.4}
+.sugg-row .sugg-why{font-size:10px;color:var(--text3)}
+.epg-nodata{font-size:9px;color:var(--amber);border:1px solid var(--amber-border);border-radius:100px;padding:0 5px;margin-left:5px}
+.epg-until{font-size:9px;color:var(--text3);margin-left:5px}
+/* EPG status bar */
+.epg-status-bar{padding:5px 13px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text3);display:none;align-items:center;gap:6px;flex-shrink:0;background:var(--green-bg)}
+.epg-status-bar.visible{display:flex}
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:3rem 2rem;color:var(--text3)}
+.empty-state svg{width:38px;height:38px;opacity:.2}
+.empty-state p{font-size:12px}
+
+/* ── EPG Sources panel ── */
+.epg-sources-panel{padding:6px 10px;border-bottom:1px solid var(--border);background:var(--s2);display:none;flex-direction:column;gap:5px}
+.epg-sources-panel.visible{display:flex}
+.epg-src-row{display:flex;align-items:center;gap:5px;font-size:11px}
+.epg-src-label{color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono);font-size:10px}
+.epg-src-badge{font-size:9px;padding:1px 5px;border-radius:100px;font-weight:600;border:1px solid var(--border)}
+.epg-src-badge.loaded{background:var(--green-bg);color:var(--green);border-color:var(--green-border)}
+.epg-src-badge.pending{color:var(--text3);border-color:var(--border)}
+.epg-src-count{font-size:10px;color:var(--text3)}
+.epg-src-rm{background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0 2px;height:auto;line-height:1}
+.epg-src-rm:hover{color:var(--red)}
+.epg-add-row{display:flex;gap:4px;align-items:center}
+.epg-add-input{flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text2);font-family:var(--mono);font-size:10px;padding:0 7px;height:24px;outline:none}
+.epg-add-input:focus{border-color:var(--accent)}
+.epg-add-input::placeholder{color:var(--text3)}
+/* Copy EPG info button */
+.mylist-epg-copy{background:none;border:1px solid var(--border);padding:0;width:22px;height:22px;border-radius:4px;color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;font-size:10px;font-weight:700}
+.mylist-epg-copy:hover{color:var(--accent);border-color:var(--accent-border);background:var(--accent-bg)}
+.mylist-epg-copy:active{transform:scale(0.9)}
+/* EPG source tag in modal */
+.epg-source-tag{font-size:9px;color:var(--text3);background:var(--s3);border:1px solid var(--border);border-radius:3px;padding:0 4px;margin-left:4px;white-space:nowrap}
+/* EPG URL field in modal */
+.epg-url-row{display:flex;gap:5px;align-items:center;margin-bottom:8px;padding:6px 8px;background:var(--s3);border-radius:var(--r);border:1px solid var(--border)}
+.epg-url-label{font-size:10px;color:var(--text3);flex-shrink:0}
+.epg-url-val{flex:1;font-size:10px;color:var(--text2);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%) translateY(8px);background:var(--s3);border:1px solid var(--border2);border-radius:var(--r);padding:7px 14px;font-size:12px;color:var(--text);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:200;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<!-- ══ Steps: what to do, in order ══ -->
+<div class="steps" id="steps">
+  <button class="step" id="step-1" onclick="stepAction(1)"><span class="step-num">1</span><span class="step-text"><span class="step-title">Find channels</span><span class="step-sub" id="step-1-sub">Discover, or scan a playlist</span></span></button>
+  <button class="step" id="step-2" onclick="stepAction(2)"><span class="step-num">2</span><span class="step-text"><span class="step-title">Add to My List</span><span class="step-sub" id="step-2-sub">Star ★ or tick + "+ My list"</span></span></button>
+  <button class="step" id="step-3" onclick="stepAction(3)"><span class="step-num">3</span><span class="step-text"><span class="step-title">Fix guide data</span><span class="step-sub" id="step-3-sub">Review suggestions</span></span></button>
+  <button class="step" id="step-4" onclick="stepAction(4)"><span class="step-num">4</span><span class="step-text"><span class="step-title">Save &amp; Rebuild</span><span class="step-sub" id="step-4-sub">Publish to your TV</span></span></button>
+  <button class="step" id="step-5" onclick="stepAction(5)"><span class="step-num">5</span><span class="step-text"><span class="step-title">Refresh NostalgiaTV</span><span class="step-sub" id="step-5-sub">Your URLs &amp; what to do</span></span></button>
+</div>
+<div class="layout">
+
+  <!-- ══ LEFT COLUMN ══ -->
+  <div class="left-col">
+    <div class="left-fixed">
+      <div class="app-header">
+        <div class="app-logo">
+          <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2H6v2h12v-2h-2v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12zM9 10l6 3.5L9 17V10z"/></svg>
+        </div>
+        <div>
+          <div class="app-title">IPTV Curator</div>
+          <div class="app-sub">Build your NostalgiaTV playlist</div>
+        </div>
+        <div class="profile-switch">
+          <span class="profile-label">Profile</span>
+          <select id="profile-select" onchange="onProfileChange()" title="Switch profile — each has its own playlist and EPG"></select>
+          <button class="btn-ghost btn-xs" onclick="createProfile()" title="Create a new empty profile">+ New</button>
+          <button class="btn-ghost btn-xs" id="btn-del-profile" onclick="deleteProfile()" title="Delete this profile" style="display:none">🗑</button>
+        </div>
+        <div class="header-stats scan-only">
+          <span class="hstat" id="hs-total">— total</span>
+          <span class="hstat s-live" id="hs-live">— live</span>
+          <span class="hstat s-checked" id="hs-checked">— selected</span>
+          <span class="hstat s-star" id="hs-star">— ★</span>
+        </div>
+      </div>
+
+      <div class="view-tabs">
+        <button class="vtab" id="vtab-discover" onclick="setLeftView('discover')" title="Channels the app found for you, already tested">✨ Discover<span class="vbadge" id="disc-badge"></span></button>
+        <button class="vtab active" id="vtab-scan" onclick="setLeftView('scan')" title="Check any playlist URL or file yourself">🔍 Scan a playlist</button>
+      </div>
+      <div class="input-bar scan-only">
+        <div class="input-row" style="margin-bottom:6px">
+          <select id="playlist-picker" onchange="pickPlaylist(this)" style="flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:var(--r);color:var(--text2);font-size:11px;padding:0 9px;height:32px;outline:none;cursor:pointer">
+            <option value="">— Quick-load a popular playlist —</option>
+            <optgroup label="⭐ Free streaming services — come with matching guide data">
+              <option value="https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/main/playlists/samsungtvplus_us.m3u">Samsung TV Plus (US)</option>
+              <option value="https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/main/playlists/plex_us.m3u">Plex (US)</option>
+              <option value="https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/main/playlists/plutotv_us.m3u">Pluto TV (US)</option>
+              <option value="https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/main/playlists/roku_all.m3u">Roku Channel</option>
+            </optgroup>
+            <optgroup label="🎬 IPTV-org by Category">
+              <option value="https://iptv-org.github.io/iptv/categories/movies.m3u">IPTV-org · Movies</option>
+              <option value="https://iptv-org.github.io/iptv/categories/news.m3u">IPTV-org · News</option>
+              <option value="https://iptv-org.github.io/iptv/categories/documentary.m3u">IPTV-org · Documentary</option>
+              <option value="https://iptv-org.github.io/iptv/categories/comedy.m3u">IPTV-org · Comedy</option>
+              <option value="https://iptv-org.github.io/iptv/categories/music.m3u">IPTV-org · Music</option>
+              <option value="https://iptv-org.github.io/iptv/categories/kids.m3u">IPTV-org · Kids</option>
+              <option value="https://iptv-org.github.io/iptv/categories/sports.m3u">IPTV-org · Sports</option>
+            </optgroup>
+            <optgroup label="🇺🇸 IPTV-org by Country">
+              <option value="https://iptv-org.github.io/iptv/countries/us.m3u">IPTV-org · USA</option>
+              <option value="https://iptv-org.github.io/iptv/countries/gb.m3u">IPTV-org · UK</option>
+              <option value="https://iptv-org.github.io/iptv/countries/ca.m3u">IPTV-org · Canada</option>
+              <option value="https://iptv-org.github.io/iptv/countries/au.m3u">IPTV-org · Australia</option>
+            </optgroup>
+            <optgroup label="🌐 IPTV-org Full Index">
+              <option value="https://iptv-org.github.io/iptv/index.m3u">IPTV-org · All channels (~42k)</option>
+              <option value="https://iptv-org.github.io/iptv/index.language.m3u">IPTV-org · By language</option>
+            </optgroup>
+            <optgroup label="📺 Free Ad-Supported (FAST) — US">
+              <option value="https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/refs/heads/main/playlists/plutotv_us.m3u">Pluto TV (USA)</option>
+              <option value="https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/refs/heads/main/playlists/plutotv_all.m3u">Pluto TV (International, no geo-lock)</option>
+              <option value="https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/refs/heads/main/playlists/roku_all.m3u">The Roku Channel (USA)</option>
+              <option value="https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/refs/heads/main/playlists/tubi_all.m3u">Tubi TV (USA)</option>
+              <option value="https://raw.githubusercontent.com/BuddyChewChew/app-m3u-generator/refs/heads/main/playlists/plex_all.m3u">Plex TV (USA)</option>
+              <option value="https://apsattv.com/ssungusa.m3u">Samsung TV Plus (USA)</option>
+              <option value="https://www.apsattv.com/uslg.m3u">LG Channels (USA)</option>
+              <option value="https://www.apsattv.com/vizio.m3u">Vizio WatchFree (USA)</option>
+              <option value="https://www.apsattv.com/xumo.m3u">XUMO (USA)</option>
+              <option value="https://www.apsattv.com/localnow.m3u">Local Now (USA)</option>
+              <option value="https://www.apsattv.com/firetv.m3u">Amazon Fire TV (USA)</option>
+            </optgroup>
+            <optgroup label="🌍 International, No Geo-lock">
+              <option value="https://www.apsattv.com/distro.m3u">DistroTV (International)</option>
+              <option value="https://www.apsattv.com/xiaomi.m3u">Xiaomi TV (International)</option>
+              <option value="https://www.apsattv.com/vidaa.m3u">Vidaa / Hisense (International)</option>
+              <option value="https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8">Free-TV (Multi-region)</option>
+              <option value="https://www.apsattv.com/rakutentv-uk.m3u">Rakuten TV (UK)</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="input-row">
+          <input class="url-input" id="playlist-url" type="url"
+            placeholder="https://iptv-org.github.io/iptv/categories/movies.m3u"
+            value="https://iptv-org.github.io/iptv/categories/movies.m3u"/>
+          <button class="btn-primary" id="btn-start" onclick="startProcess()">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Check
+          </button>
+          <button class="btn-ghost" id="btn-stop" onclick="stopProcess()" disabled>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>Stop
+          </button>
+          <button class="btn-ghost" onclick="$('file-browse').click()" title="Load a local .m3u / .m3u8 file">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>Browse
+          </button>
+          <input type="file" id="file-browse" accept=".m3u,.m3u8" style="display:none" onchange="loadFile(event)">
+        </div>
+        <div class="opts-row">
+          <label class="ck-label"><input type="checkbox" id="opt-english" checked> English filter</label>
+          <label class="ck-label"><input type="checkbox" id="opt-hide-geo"> Hide geo-blocked</label>
+          <div class="sel-wrap">Res <select id="opt-res">
+            <option value="all">All</option>
+            <option value="hd">HD+ (720p/1080p/4K)</option>
+            <option value="fhd">FHD+ (1080p/4K only)</option>
+            <option value="sd">SD only</option>
+          </select></div>
+          <div class="sel-wrap">Timeout <select id="opt-timeout"><option value="5000">5s</option><option value="7000" selected>7s</option><option value="10000">10s</option><option value="15000">15s</option></select></div>
+          <div class="sel-wrap">Workers <select id="opt-concurrency"><option value="3">3</option><option value="6" selected>6</option><option value="10">10</option><option value="15">15</option></select></div>
+        </div>
+      </div>
+
+      <div class="filter-notice scan-only" id="filter-notice">
+        ⚠ English filter is best-effort — preview channels and use "Confirm English" or "Exclude" buttons in the player.
+      </div>
+      <div class="progress-bar-wrap scan-only"><div class="progress-bar-fill" id="prog-fill"></div></div>
+
+      <div class="toolbar scan-only" id="toolbar" style="display:none">
+        <input class="search-input" id="search-input" type="text" placeholder="Search…" oninput="applyFilters()">
+        <div class="filter-tabs">
+          <button class="ftab active" id="ftab-all"      onclick="setFilter('all')">All</button>
+          <button class="ftab"        id="ftab-live"     onclick="setFilter('live')">Live</button>
+          <button class="ftab"        id="ftab-starred"  onclick="setFilter('starred')">★ Starred</button>
+          <button class="ftab"        id="ftab-geo"      onclick="setFilter('geo')">🚫 Geo</button>
+          <button class="ftab"        id="ftab-excluded" onclick="setFilter('excluded')">Excluded</button>
+        </div>
+        <div class="toolbar-right">
+          <span class="sel-count" id="sel-count"></span>
+          <button class="btn-ghost btn-sm" onclick="selectAllLive()">All live</button>
+          <button class="btn-ghost btn-sm" onclick="selectNone()">None</button>
+          <button class="btn-green btn-sm" onclick="addSelectedToList()">+ My list</button>
+        </div>
+      </div>
+    </div><!-- /left-fixed -->
+
+    <div class="channel-scroll scan-only" id="channel-scroll">
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        <p>Enter a URL and hit Check — or Browse / drag-drop an .m3u file</p>
+      </div>
+    </div>
+    <!-- ══ Discover view ══ -->
+    <div class="disc-view" id="disc-view">
+      <div class="disc-head">
+        <div class="disc-status" id="disc-status">Loading…</div>
+        <button class="btn-primary btn-sm" id="btn-disc-run" onclick="runDiscover()" title="Download the watched playlists now, test new channels and check their guide data">⟳ Look for new channels now</button>
+        <button class="btn-ghost btn-sm" onclick="openDiscSources()" title="Choose which playlists Discover watches">Sources</button>
+      </div>
+      <div class="progress-bar-wrap" id="disc-prog" style="display:none"><div class="progress-bar-fill" id="disc-prog-fill"></div></div>
+      <div class="disc-filters">
+        <input class="search-input" id="disc-search" placeholder="Search channels…" oninput="renderDiscover()">
+        <select id="disc-source" onchange="renderDiscover()" title="Only show channels from one source"><option value="">All sources</option></select>
+        <select id="disc-group" onchange="renderDiscover()" title="Only show one category"><option value="">All categories</option></select>
+        <label class="ck-label" title="Only channels that will get real TV guide data"><input type="checkbox" id="disc-guide" checked onchange="renderDiscover()"> Has guide data</label>
+        <label class="ck-label" title="Hide channels with the same name as one already in My List"><input type="checkbox" id="disc-hide-have" checked onchange="renderDiscover()"> Hide ones I already have</label>
+        <label class="ck-label" title="Only channels found since you last opened Discover"><input type="checkbox" id="disc-only-new" onchange="renderDiscover()"> New since last visit</label>
+      </div>
+      <div class="disc-bulk">
+        <span id="disc-count"></span>
+        <button class="btn-ghost btn-xs" style="margin-left:auto" onclick="dismissShown()" title="Hide every channel currently shown, for good">✕ Not interested in these</button>
+        <button class="btn-green btn-xs" onclick="addShown()" title="Add every channel currently shown to My List">+ Add all shown</button>
+      </div>
+      <div class="channel-scroll" id="disc-list"></div>
+    </div>
+  </div><!-- /left-col -->
+
+  <div class="col-divider" id="col-divider" title="Drag to resize · double-click to reset"></div>
+
+  <!-- ══ RIGHT COLUMN ══ -->
+  <div class="right-col" id="right-col">
+
+    <!-- Sticky player -->
+    <div class="player-sticky">
+      <div class="player-header">
+        <button class="btn-ghost btn-xs player-toggle" id="btn-player-toggle" onclick="togglePlayer()" title="Show or hide the preview player">Hide player</button>
+        <div class="player-title" id="player-title">No channel selected</div>
+        <div class="player-meta" id="player-meta">Click ▶ on a channel, or a channel name in My List, to preview</div>
+        <div class="guide-now" id="guide-now" style="display:none"></div>
+        <div class="audio-label" id="audio-label">Audio tracks:</div>
+        <div class="audio-tracks" id="audio-tracks"></div>
+      </div>
+      <div class="player-wrap">
+        <video id="player-video" controls playsinline></video>
+        <div class="player-idle" id="player-idle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="5,3 19,12 5,21"/></svg>
+          <p>Select a channel to preview</p>
+        </div>
+      </div>
+      <div class="player-status-bar">
+        <div class="player-dot" id="player-dot"></div>
+        <span class="player-status-text" id="player-status-text">Idle</span>
+        <div class="player-action-btns">
+          <button class="btn-green btn-sm" id="btn-confirm-eng" style="display:none" onclick="confirmEnglish()">✓ Confirm English</button>
+          <button class="btn-amber btn-sm" id="btn-exclude"     style="display:none" onclick="excludeChannel()">✕ Exclude</button>
+        </div>
+      </div>
+    </div><!-- /player-sticky -->
+
+    <!-- Scrollable my list -->
+    <div class="mylist-panel">
+      <!-- ── Endpoints panel: always-visible playlist + EPG URLs with live status ── -->
+      <div class="endpoints-panel" id="endpoints-panel">
+        <div class="ep-row">
+          <span class="ep-label">Playlist</span>
+          <span class="ep-dot" id="ep-dot-playlist" title="status"></span>
+          <input class="ep-url" id="ep-url-playlist" readonly value="—" onclick="this.select()">
+          <button class="btn-ghost btn-xs" onclick="copyEndpoint('ep-url-playlist')" title="Copy playlist URL">⧉</button>
+        </div>
+        <div class="ep-row">
+          <span class="ep-label">EPG&nbsp;XML</span>
+          <span class="ep-dot" id="ep-dot-epg" title="status"></span>
+          <input class="ep-url" id="ep-url-epg" readonly value="—" onclick="this.select()">
+          <button class="btn-ghost btn-xs" onclick="copyEndpoint('ep-url-epg')" title="Copy EPG URL">⧉</button>
+        </div>
+        <div class="ep-meta" id="ep-meta">Checking server…</div>
+        <button class="btn-amber btn-xs" id="btn-suggestions" style="display:none;margin-top:6px" onclick="openSuggestions()" title="Channels with a possible guide match the app did not apply on its own"></button>
+      </div>
+      <div class="ml-bar">
+        <div class="ml-row">
+          <span class="ml-title">My List</span>
+          <span class="mylist-count" id="mylist-count">0</span>
+          <span class="ml-hint" style="margin-left:auto">Click a channel name to preview it</span>
+        </div>
+        <div class="ml-row" id="ml-filters">
+          <button class="ml-chip active" data-f="all" onclick="setListFilter('all')" title="Every channel in My List">All<span class="n" id="mlc-all">0</span></button>
+          <button class="ml-chip" data-f="ok" onclick="setListFilter('ok')" title="Channels with real guide data">✓ Guide<span class="n" id="mlc-ok">0</span></button>
+          <button class="ml-chip" data-f="needs" onclick="setListFilter('needs')" title="Placeholder, suggestion, expired or not checked yet — decide: find guide data, keep the placeholder, or remove">Needs guide<span class="n" id="mlc-needs">0</span></button>
+          <button class="ml-chip" data-f="dead" onclick="setListFilter('dead')" title="Channels whose last retest failed">Dead<span class="n" id="mlc-dead">0</span></button>
+        </div>
+        <div class="ml-row">
+          <button class="btn-green btn-sm" onclick="saveAndRebuild()" id="btn-save-rebuild" title="Publish My List to your TV and rebuild its guide">💾 Save &amp; Rebuild</button>
+          <button class="btn-ghost btn-sm" onclick="healthCheck()" id="btn-retest-all" title="Re-test every channel; for any that died, look for a working replacement (also runs automatically every night)">🩺 Check all</button>
+          <button class="btn-ghost btn-sm" onclick="matchAllEPG()" title="Give guide data to channels whose name exactly matches one guide channel">🔗 Auto-match</button>
+          <button class="btn-ghost btn-sm" onclick="openGuideSources()" title="Choose which guide sources are used, see their status, refresh them">📡 Guide sources</button>
+          <button class="btn-ghost btn-sm" id="btn-remove-filtered" onclick="removeFiltered()" style="display:none" title="Remove every channel currently shown"></button>
+          <button class="btn-ghost btn-sm" onclick="clearMyList()" style="margin-left:auto" title="Remove every channel from My List">Clear list</button>
+        </div>
+      </div>
+      <div class="mylist-scroll" id="mylist-scroll">
+        <div class="mylist-empty">Star ★ a channel or check ✓ + "+ My list" to add channels here</div>
+      </div>
+      <div class="mylist-actions" style="padding-bottom:4px;border-bottom:1px solid var(--border);margin-bottom:0;flex-direction:row;gap:5px;align-items:center">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:11px;color:var(--text3);flex-shrink:0">Start ch#</span>
+          <input id="ch-start-num" type="number" min="1" value="700" onchange="saveStartNum()"
+            style="width:70px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;padding:0 8px;height:26px;outline:none;font-variant-numeric:tabular-nums"
+            title="First channel number in the exported file — channels will be numbered sequentially from here">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:200px">
+          <span style="font-size:11px;color:var(--text3);flex-shrink:0">EPG URL</span>
+          <input id="epg-url-input" type="text" value=""
+            style="flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-family:var(--mono);font-size:10px;padding:0 8px;height:26px;outline:none"
+            title="EPG/XMLTV URL written into the exported playlist header — your IPTV client reads this to fetch guide data">
+        </div>
+      </div>
+      <div class="mylist-actions">
+        <button class="btn-green" style="flex:1" onclick="exportMyList()">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          Export .m3u
+        </button>
+        <button class="btn-ghost" onclick="exportStarred()">★ Starred</button>
+        <button class="btn-ghost" onclick="$('import-file').click()" title="Import a previously exported .m3u back into My List">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" transform="rotate(180 12 12)"/></svg>
+          Import
+        </button>
+        <input type="file" id="import-file" accept=".m3u,.m3u8" style="display:none" onchange="importMyList(event)">
+        <button class="btn-amber" onclick="openHostModal()">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+          Use in NostalgiaTV
+        </button>
+      </div>
+    </div>
+  </div><!-- /right-col -->
+</div><!-- /layout -->
+
+<!-- ══ Host Modal ══ -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="handleBackdropClick(event)">
+  <div class="modal" id="modal">
+    <button class="modal-close" onclick="closeHostModal()">✕</button>
+    <h2>Use in NostalgiaTV</h2>
+    <p class="modal-sub">This app hosts your playlist and TV guide for you. Nothing else to set up.</p>
+
+    <div class="modal-section">
+      <div class="modal-section-title">Your addresses for this profile</div>
+      <p><strong style="color:var(--text);font-size:12px">Playlist (M3U) URL</strong></p>
+      <div class="copy-row">
+        <input class="copy-input" id="lan-url-input" value="" readonly onclick="this.select()"/>
+        <button class="btn-ghost btn-sm" onclick="copyLanUrl()">Copy</button>
+      </div>
+      <p style="margin-top:8px"><strong style="color:var(--text);font-size:12px">TV guide (XMLTV) URL</strong></p>
+      <div class="copy-row">
+        <input class="copy-input" id="nt-epg-url" value="" readonly onclick="this.select()"/>
+        <button class="btn-ghost btn-sm" onclick="copyToClipboard($('nt-epg-url').value).then(()=>showToast('URL copied!'))">Copy</button>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div class="modal-section">
+      <div class="modal-section-title">After you press Save &amp; Rebuild</div>
+      <p><b>1.</b> In NostalgiaTV, refresh this source (or restart the app) so it re-reads the playlist and guide.</p>
+      <p><b>2.</b> For <b>custom channels</b> you set up by hand: use the 📡 button next to the channel in My List — it copies the XMLTV URL and the exact <i>Guide Channel</i> id to enter in the channel editor. Only needed when a channel's guide choice changed.</p>
+      <p><b>3.</b> Nothing to do day-to-day: guides refresh automatically every few hours and the TV picks them up on its own refresh.</p>
+    </div>
+
+    <hr class="divider">
+
+    <div class="modal-section">
+      <div class="modal-section-title">Other options</div>
+      <p>Need the playlist as a file? Use <b>Export .m3u</b> at the bottom of My List (a backup copy — your TV should use the URL above).</p>
+      <button class="btn-ghost btn-sm" onclick="copyRawM3U()" style="margin-bottom:6px">Copy raw M3U to clipboard</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ EPG Match Modal ══ -->
+<div class="epg-modal-backdrop" id="epg-modal-backdrop" onclick="handleEpgBackdrop(event)">
+  <div class="epg-modal">
+    <div class="epg-modal-head">
+      <h3>Choose guide data</h3>
+      <button class="modal-close" onclick="closeEpgModal()">✕</button>
+    </div>
+    <div class="epg-modal-body">
+      <div class="epg-ch-name" id="epg-ch-name"></div>
+      <p>Pick the guide listing for this channel. If none fits, keep the placeholder (the TV guide shows the channel name) or remove the channel.</p>
+      <div class="epg-url-row" id="epg-url-row">
+        <span class="epg-url-label">Your XMLTV:</span>
+        <input class="epg-add-input" id="epg-ch-url" type="text" readonly style="flex:1;font-size:10px;height:22px">
+        <button class="btn-ghost btn-sm" onclick="copyChannelEpgInfo()" title="Copy the XMLTV URL + this channel's Guide Channel id for NostalgiaTV">📋 Copy binding</button>
+      </div>
+      <div class="epg-input-row">
+        <input class="epg-id-input" id="epg-search-input" type="text" placeholder="Search channel name…" oninput="searchEPG(this.value)">
+      </div>
+      <div class="ml-row" style="margin:-2px 0 8px">
+        <button class="btn-ghost btn-sm" onclick="clearEpgId()" title="No guide data — the TV guide shows the channel name">Keep placeholder</button>
+        <button class="btn-ghost btn-sm" onclick="removeFromModal()" title="Take this channel out of My List">Remove channel</button>
+        <button class="btn-ghost btn-sm" onclick="previewFromModal()" title="Play this channel so you can compare with 'On now'">▶ Preview</button>
+      </div>
+      <div class="epg-results" id="epg-results">
+        <div class="epg-none">Load the EPG database first, then search</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Guide Sources Modal ══ -->
+<div class="epg-modal-backdrop" id="gs-backdrop" onclick="if(event.target===this)closeGuideSources()">
+  <div class="epg-modal" style="width:560px">
+    <div class="epg-modal-head">
+      <h3>Guide sources</h3>
+      <button class="modal-close" onclick="closeGuideSources()">✕</button>
+    </div>
+    <div class="epg-modal-body">
+      <p>Where your TV guide data comes from. <b>Cable</b> guides are only used for regular channels; <b>FAST</b> guides (Pluto, Samsung, Roku, Plex) only for free streaming channels — so a FAST channel never gets the cable network's schedule. Guides refresh automatically.</p>
+      <div id="gs-list"><div class="epg-none">Loading…</div></div>
+      <div class="ml-row" style="margin-top:10px">
+        <button class="btn-green btn-sm" id="btn-gs-refresh" onclick="refreshGuides()">⟳ Refresh guides now</button>
+        <span class="ml-hint" id="gs-meta"></span>
+      </div>
+      <p style="margin-top:14px;margin-bottom:6px"><b>Add another XMLTV guide</b> (a .xml or .xml.gz URL):</p>
+      <div class="ml-row">
+        <input class="epg-add-input" id="gs-add-label" placeholder="Name" style="width:110px">
+        <input class="epg-add-input" id="gs-add-url" placeholder="https://…/guide.xml.gz" style="flex:1">
+        <select id="gs-add-kind" class="epg-add-input" style="width:auto"><option value="cable">Cable</option><option value="fast">FAST</option></select>
+        <button class="btn-ghost btn-sm" onclick="addGuideSource()">Add</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Discover Sources Modal ══ -->
+<div class="epg-modal-backdrop" id="ds-backdrop" onclick="if(event.target===this)closeDiscSources()">
+  <div class="epg-modal" style="width:560px">
+    <div class="epg-modal-head"><h3>Discover sources</h3><button class="modal-close" onclick="closeDiscSources()">✕</button></div>
+    <div class="epg-modal-body">
+      <p>Playlists Discover watches. Every night it downloads them, keeps English channels you don't already have, tests each one, and checks for guide data. Turn sources on or off, or add another playlist URL.</p>
+      <div id="ds-list"></div>
+      <p style="margin-top:14px;margin-bottom:6px"><b>Add a playlist</b> (.m3u / .m3u8 URL):</p>
+      <div class="ml-row">
+        <input class="epg-add-input" id="ds-add-label" placeholder="Name" style="width:110px">
+        <input class="epg-add-input" id="ds-add-url" placeholder="https://…/playlist.m3u" style="flex:1">
+        <button class="btn-ghost btn-sm" onclick="addDiscSource()">Add</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Guide Suggestions Modal ══ -->
+<div class="epg-modal-backdrop" id="sugg-backdrop" onclick="if(event.target===this)closeSuggestions()">
+  <div class="epg-modal">
+    <div class="epg-modal-head">
+      <h3>Possible guide matches</h3>
+      <button class="modal-close" onclick="closeSuggestions()">✕</button>
+    </div>
+    <div class="epg-modal-body">
+      <p>These channels have no guide data yet, but the app found a likely match. It did <b>not</b> use them on its own because they might be wrong. "Use it" applies the match; "Choose…" lets you search yourself. Then press Save &amp; Rebuild.</p>
+      <div id="sugg-list"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let channels  = [];
+let myList    = [];
+let liveCount = 0, deadCount = 0, checkedCount = 0;
+let stopped   = false;
+let currentFilter = 'all';
+let currentHls    = null;
+let playingIdx    = -1;
+
+// ── Persist ──
+// My List is stored on the server (per profile) so it survives browser
+// clears and is the same from any computer. The browser keeps a copy as cache.
+let _saveTimer = null, _saveProfile = null, _saveList = null;
+function save() {
+  try { localStorage.setItem('iptv-mylist:' + activeProfile, JSON.stringify(myList)); } catch(e) {}
+  if (_saveTimer && _saveProfile && _saveProfile !== activeProfile) pushMyList();  // flush the other profile first
+  _saveProfile = activeProfile; _saveList = myList;     // snapshot: this profile, this list
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(pushMyList, 700);
+}
+async function pushMyList() {
+  const prof = _saveProfile || activeProfile, list = _saveList || myList;
+  clearTimeout(_saveTimer); _saveTimer = null;
+  try {
+    const res = await fetch(API + '/api/mylist?profile=' + encodeURIComponent(prof), {
+      method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({list})});
+    if (res.ok && prof === activeProfile) adoptUids((await res.json()).list);
+  } catch(e) { /* offline: the browser copy is kept and pushed next time */ }
+}
+// copy permanent ids (and server-side fields) onto the matching local channels
+function adoptUids(serverList) {
+  if (!Array.isArray(serverList)) return;
+  const byUrl = {};
+  serverList.forEach(x => { byUrl[x.url] = x; });
+  let changed = false;
+  myList.forEach(c => {
+    const x = byUrl[c.url];
+    if (x && x.uid && c.uid !== x.uid) { c.uid = x.uid; changed = true; }
+  });
+  if (changed) { try { localStorage.setItem('iptv-mylist:' + activeProfile, JSON.stringify(myList)); } catch(e) {} renderMyList(); }
+}
+async function loadMyList() {
+  let local = [];
+  try { local = JSON.parse(localStorage.getItem('iptv-mylist:' + activeProfile) || '[]'); } catch(e) {}
+  let server = null;
+  try {
+    const res = await fetch(API + '/api/mylist?profile=' + encodeURIComponent(activeProfile), {cache:'no-store'});
+    if (res.ok) server = (await res.json()).list;
+  } catch(e) {}
+  if (Array.isArray(server) && server.length) {
+    myList = server;
+  } else {
+    myList = local;                      // first run: move the browser list to the server
+    if (myList.length) save();
+  }
+  try { localStorage.setItem('iptv-mylist:' + activeProfile, JSON.stringify(myList)); } catch(e) {}
+  renderMyList(); updateStats();
+}
+
+// ── Playlist picker ──
+function pickPlaylist(sel) {
+  if (!sel.value) return;
+  $('playlist-url').value = sel.value;
+  sel.value = ''; // reset so same item can be re-selected
+}
+
+// ── Resolution detection from channel name ──
+function detectRes(ch) {
+  const n = (ch.name + ' ' + (ch.group||'')).toUpperCase();
+  if (/\b(4K|UHD|2160|ULTRA)\b/.test(n)) return '4k';
+  if (/\b(FHD|1080[PI]?|FULLHD|FULL HD)\b/.test(n)) return 'fhd';
+  if (/\b(HD|720[PI]?|HQ)\b/.test(n)) return 'hd';
+  if (/\b(SD|480[PI]?|360[PI]?|LOW)\b/.test(n)) return 'sd';
+  return 'unknown'; // no label — don't filter out
+}
+
+function matchesRes(ch, filter) {
+  if (filter === 'all') return true;
+  const r = detectRes(ch);
+  if (filter === 'hd')  return r === 'hd' || r === 'fhd' || r === '4k' || r === 'unknown';
+  if (filter === 'fhd') return r === 'fhd' || r === '4k' || r === 'unknown';
+  if (filter === 'sd')  return r === 'sd'  || r === 'unknown';
+  return true;
+}
+
+// ── Parse M3U ──
+function parseM3U(text) {
+  const lines = text.split('\n');
+  const result = [];
+  let cur = null;
+  for (const raw of lines) {
+    const l = raw.trim();
+    if (l.startsWith('#EXTINF')) {
+      const g = rx => { const m = l.match(rx); return m ? m[1] : ''; };
+      cur = {
+        name:     (l.match(/,(.+)$/) || [])[1]?.trim() || 'Unknown',
+        tvgId:    g(/tvg-id="([^"]+)"/i),
+        language: g(/tvg-language="([^"]+)"/i),
+        country:  g(/tvg-country="([^"]+)"/i),
+        logo:     g(/tvg-logo="([^"]+)"/i),
+        group:    g(/group-title="([^"]+)"/i),
+        extinf: l, url: '',
+        status: 'pending', starred: false, checked: false,
+        engConfirmed: false, excluded: false
+      };
+    } else if (l.startsWith('http') && cur) {
+      cur.url = l; result.push(cur); cur = null;
+    }
+  }
+  return result;
+}
+
+// ── English detection ──
+const ENG_COUNTRIES = new Set(['US','GB','CA','AU','NZ','IE','ZA','JM','TT','BB','GY','BZ','GH','NG','KE','UG','TZ','ZW']);
+const NON_LATIN_RX  = /[\u0400-\u04FF\u0600-\u06FF\u0900-\u097F\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF\u0E00-\u0E7F\u0590-\u05FF]/;
+const NON_ENG_RX    = /\b(hindi|arabic|french|fran[cç]ais|español|spanish|german|deutsch|italiano|italian|portugu[eê]s|portuguese|russian|chinese|korean|japanese|dutch|polish|turkish|persian|urdu|malay|thai|vietnamese|greek|hebrew|romanian|czech|hungarian|swedish|norwegian|danish|finnish|tagalog|swahili|bengali|punjabi|gujarati|tamil|telugu|kannada|malayalam|burmese|khmer|mongolian|albanian|serbian|croatian|bulgarian|slovak|latvian|lithuanian|estonian|azerbaijani|georgian|armenian|kazakh|uzbek)\b/i;
+const ENG_WORD_RX   = /\b(the|and|news|live|sports?|movies?|channel|network|tv|hd|ultra|prime|classic|cinema|action|comedy|drama|family|kids?|music|national|international|world|america[n]?|british|english|nbc|abc|cbs|fox|cnn|hbo|amc|syfy|espn|bbc|itv|sky|pbs)\b/i;
+
+function isEnglish(ch) {
+  const lang    = ch.language.toLowerCase().trim();
+  const country = ch.country.toUpperCase().trim();
+  const name    = ch.name;
+  if (lang) return /^(english|eng|en(-\w+)?)$/.test(lang) || lang.includes('english');
+  if (country && ENG_COUNTRIES.has(country)) return true;
+  if (NON_LATIN_RX.test(name)) return false;
+  if (NON_ENG_RX.test(name))   return false;
+  if (ENG_WORD_RX.test(name))  return true;
+  return true; // untagged, permissive
+}
+
+// ── Helpers ──
+function $(id) { return document.getElementById(id); }
+function showToast(msg, dur=2600) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), dur);
+}
+// Copies text to the clipboard. navigator.clipboard requires a secure context
+// (https or localhost) and silently fails on plain http://<lan-ip> pages, so
+// fall back to the old textarea + execCommand trick when it's unavailable.
+function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise((resolve, reject) => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.left = '-1000px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      ok ? resolve() : reject(new Error('execCommand copy failed'));
+    } catch (err) {
+      document.body.removeChild(ta);
+      reject(err);
+    }
+  });
+}
+function initials(n) { return n.split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?'; }
+function makeLogo(ch, cls, phCls) {
+  if (ch.logo) {
+    const img = document.createElement('img');
+    img.className = cls; img.src = ch.logo; img.alt = '';
+    img.onerror = function() { const p=document.createElement('div'); p.className=phCls; p.textContent=initials(ch.name); this.replaceWith(p); };
+    return img;
+  }
+  const p = document.createElement('div'); p.className = phCls; p.textContent = initials(ch.name);
+  return p;
+}
+function updateStats() {
+  try { updateSteps(); } catch(e) {}
+  $('hs-total').textContent   = channels.length + ' total';
+  $('hs-live').textContent    = liveCount + ' live';
+  const sel = channels.filter(c=>c.checked).length;
+  $('hs-checked').textContent = sel + ' selected';
+  $('hs-star').textContent    = channels.filter(c=>c.starred).length + ' ★';
+  $('sel-count').textContent  = sel ? sel + ' selected' : '';
+  $('mylist-count').textContent = myList.length;
+}
+
+// ── Channel row ──
+function createRow(ch, idx) {
+  const row = document.createElement('div');
+  row.className = 'ch-row' + (ch.engConfirmed?' eng-override':'');
+  row.id = 'row-' + idx;
+
+  const cb = document.createElement('input');
+  cb.type='checkbox'; cb.className='ch-cb'; cb.checked=ch.checked;
+  cb.onchange = () => { ch.checked = cb.checked; updateStats(); };
+  row.appendChild(cb);
+
+  row.appendChild(makeLogo(ch,'ch-logo','ch-logo-ph'));
+
+  const info = document.createElement('div'); info.className='ch-info';
+  const nm = document.createElement('div'); nm.className='ch-name'; nm.textContent=ch.name; nm.title=ch.name;
+  const mt = document.createElement('div'); mt.className='ch-meta';
+  mt.textContent = [ch.language||null,ch.country||null,ch.group||null].filter(Boolean).join(' · ')||'Untagged';
+  info.appendChild(nm); info.appendChild(mt);
+  row.appendChild(info);
+
+  const acts = document.createElement('div'); acts.className='ch-actions';
+
+  // recheck
+  const rc = document.createElement('button'); rc.className='ch-icon-btn'; rc.title='Re-check stream';
+  rc.innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.96 7.96 0 0012 4c-4.42 0-8 3.58-8 8s3.58 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>';
+  rc.onclick = () => recheckOne(ch,idx);
+  acts.appendChild(rc);
+
+  // play
+  const pl = document.createElement('button'); pl.className='ch-icon-btn play-btn'; pl.id='play-'+idx; pl.title='Preview';
+  pl.innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+  pl.onclick = () => playChannel(ch,idx);
+  acts.appendChild(pl);
+
+  // copy stream URL
+  const cp = document.createElement('button'); cp.className='ch-icon-btn copy-url-btn'; cp.title=ch.url;
+  cp.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+  cp.onclick=(e)=>{e.stopPropagation();copyToClipboard(ch.url).then(()=>showToast(`Copied m3u8 URL for "${ch.name}"`)).catch(()=>showToast('Copy failed'));};
+  acts.appendChild(cp);
+
+  // star — starring also adds to My List
+  const st = document.createElement('button'); st.className='ch-star'+(ch.starred?' starred':''); st.id='star-'+idx; st.title='Star (also adds to My list)'; st.textContent='★';
+  st.onclick = () => {
+    ch.starred = !ch.starred;
+    st.className = 'ch-star'+(ch.starred?' starred':'');
+    if (ch.starred) addToMyList(ch);   // auto-add on star
+    else removeFromList(ch.url);       // auto-remove on unstar
+    updateStats();
+  };
+  acts.appendChild(st);
+
+  const badge = document.createElement('div');
+  badge.className = 'ch-badge'+(ch.status==='live'?' badge-live':ch.status==='dead'?' badge-dead':'');
+  badge.id='badge-'+idx;
+  badge.textContent = ch.status==='live'?'● Live':ch.status==='dead'?'✕ Dead':'—';
+  acts.appendChild(badge);
+
+  row.appendChild(acts);
+  return row;
+}
+
+function renderChannels() {
+  const scroll = $('channel-scroll');
+  scroll.innerHTML='';
+  if (!channels.length) {
+    scroll.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><p>No channels matched</p></div>';
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  channels.forEach((ch,i) => frag.appendChild(createRow(ch,i)));
+  scroll.appendChild(frag);
+  applyFilters();
+}
+
+// ── Filters ──
+function setFilter(f) {
+  currentFilter = f;
+  ['all','live','starred','geo','excluded'].forEach(x => $('ftab-'+x)?.classList.toggle('active',x===f));
+  applyFilters();
+}
+function applyFilters() {
+  const q        = $('search-input').value.toLowerCase();
+  const resFilter= $('opt-res')?.value || 'all';
+  const hideGeo  = $('opt-hide-geo')?.checked;
+  channels.forEach((ch,i) => {
+    const row = $('row-'+i); if (!row) return;
+    const mq  = !q || ch.name.toLowerCase().includes(q)||(ch.country||'').toLowerCase().includes(q)||(ch.language||'').toLowerCase().includes(q)||(ch.group||'').toLowerCase().includes(q);
+    const mf  = currentFilter==='all'      ? !ch.excluded
+              : currentFilter==='live'     ? ch.status==='live'&&!ch.excluded
+              : currentFilter==='starred'  ? ch.starred&&!ch.excluded
+              : currentFilter==='geo'      ? ch.status==='geo'
+              : currentFilter==='excluded' ? ch.excluded : true;
+    const mRes = matchesRes(ch, resFilter);
+    const mGeo = !(hideGeo && ch.status==='geo');
+    row.classList.toggle('hidden', !(mq && mf && mRes && mGeo));
+  });
+}
+
+// ── Check streams ──
+// Checked by the app server, which actually pulls a piece of video:
+// playlist -> variant -> first segment. No browser CORS false-"dead" results.
+async function checkOne(ch) {
+  const timeout = parseInt($('opt-timeout').value) / 1000;
+  let r = null;
+  try {
+    const res = await fetch(API + '/api/test-stream', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ url: ch.url, timeout })
+    });
+    if (res.ok) r = await res.json();
+  } catch(e) {}
+  const ok = !!(r && r.ok);
+  ch.geoBlocked = !!(r && r.geo);
+  ch.status = ok ? 'live' : ch.geoBlocked ? 'geo' : 'dead';
+  ch.testDetail = r ? r.detail : 'app server not reachable';
+  return ok;
+}
+
+async function recheckOne(ch,idx) {
+  const badge=$('badge-'+idx), wasLive=ch.status==='live';
+  badge.textContent='…'; badge.className='ch-badge badge-checking';
+  const ok = await checkOne(ch);
+  if (ok&&!wasLive) liveCount++;
+  if (!ok&&wasLive) { liveCount=Math.max(0,liveCount-1); deadCount++; }
+  const isGeo=ch.status==='geo';
+  badge.textContent=ok?'● Live':isGeo?'🚫 Geo':'✕ Dead';
+  badge.className='ch-badge '+(ok?'badge-live':isGeo?'badge-geo':'badge-dead');
+  badge.title=ch.testDetail||'';
+  $('hs-live').textContent=liveCount+' live';
+}
+
+async function startProcess() {
+  const url = $('playlist-url').value.trim();
+  if (!url || url.startsWith('(')) { showToast('Enter a playlist URL or use Browse to load a file.'); return; }
+  stopped=false; liveCount=0; deadCount=0; checkedCount=0; channels=[];
+  stopPlayer();
+  $('btn-start').disabled=true; $('btn-stop').disabled=false;
+  $('toolbar').style.display='none';
+  $('prog-fill').style.width='0%';
+  updateStats();
+
+  let text;
+  try {
+    // fetched by the app server, so source sites can't block it with CORS
+    const res=await fetch(API + '/api/fetch-playlist', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ url })
+    });
+    if(!res.ok){ let d=''; try{d=(await res.json()).detail||'';}catch(_){} throw new Error(d||('HTTP '+res.status)); }
+    text=(await res.json()).text;
+  } catch(e) {
+    showToast('Could not fetch playlist: '+e.message,4000);
+    $('btn-start').disabled=false; $('btn-stop').disabled=true; return;
+  }
+
+  const parsed=parseM3U(text);
+  const filterEn=$('opt-english').checked;
+  channels=filterEn?parsed.filter(isEnglish):parsed;
+  $('filter-notice').style.display=filterEn?'flex':'none';
+  updateStats(); renderChannels(); $('toolbar').style.display='flex';
+
+  const concurrency=parseInt($('opt-concurrency').value);
+  let idx=0;
+  async function worker() {
+    while(idx<channels.length&&!stopped) {
+      const i=idx++, ch=channels[i];
+      const badge=$('badge-'+i);
+      if(badge){badge.textContent='…';badge.className='ch-badge badge-checking';}
+      const ok=await checkOne(ch);
+      checkedCount++;
+      if(ok) liveCount++; else deadCount++;
+      $('prog-fill').style.width=Math.round(checkedCount/channels.length*100)+'%';
+      $('hs-live').textContent=liveCount+' live';
+      if(badge){
+        const isGeo=ch.status==='geo';
+        badge.textContent=ok?'● Live':isGeo?'🚫 Geo':'✕ Dead';
+        badge.className='ch-badge '+(ok?'badge-live':isGeo?'badge-geo':'badge-dead');
+        badge.title=ch.testDetail||'';
+      }
+    }
+  }
+  await Promise.all(Array.from({length:concurrency},worker));
+  $('btn-start').disabled=false; $('btn-stop').disabled=true;
+  showToast(stopped?`Stopped — ${liveCount} live so far`:`Done — ${liveCount} live out of ${channels.length}`);
+}
+function stopProcess(){ stopped=true; $('btn-stop').disabled=true; }
+
+// ── Selection ──
+function selectAllLive() {
+  channels.forEach((ch,i)=>{ if(ch.status==='live'&&!ch.excluded){ch.checked=true;const cb=$('row-'+i)?.querySelector('.ch-cb');if(cb)cb.checked=true;} });
+  updateStats();
+}
+function selectNone() {
+  channels.forEach((ch,i)=>{ ch.checked=false;const cb=$('row-'+i)?.querySelector('.ch-cb');if(cb)cb.checked=false; });
+  updateStats();
+}
+
+// ── My List ──
+function addToMyList(ch) {
+  if (!myList.find(m=>m.url===ch.url)) { myList.push({...ch}); save(); renderMyList(); }
+}
+function addSelectedToList() {
+  const sel=channels.filter(c=>c.checked&&!c.excluded);
+  if(!sel.length){showToast('Check some channels first.');return;}
+  let added=0;
+  sel.forEach(ch=>{ if(!myList.find(m=>m.url===ch.url)){myList.push({...ch});added++;} });
+  save(); renderMyList(); updateStats();
+  showToast(added?`Added ${added} channel${added>1?'s':''}.`:'Already in your list.');
+}
+function removeFromList(url) {
+  myList=myList.filter(m=>m.url!==url);
+  save(); renderMyList(); updateStats();
+}
+function clearMyList() {
+  if(!myList.length)return;
+  if(!confirm('Clear your entire list?'))return;
+  myList=[]; save(); renderMyList(); updateStats(); showToast('List cleared.');
+}
+function renderMyList() {
+  const scroll=$('mylist-scroll');
+  $('mylist-count').textContent=myList.length;
+  updateEpgStatus();
+  const shown = myList.filter(inListFilter);
+  const rmBtn = $('btn-remove-filtered');
+  if (rmBtn) {
+    rmBtn.style.display = (listFilter === 'dead' || listFilter === 'needs') && shown.length ? '' : 'none';
+    rmBtn.textContent = `🗑 Remove these ${shown.length}`;
+  }
+  if(!myList.length){scroll.innerHTML='<div class="mylist-empty">Star ★ a channel or check ✓ + "+ My list" to add channels here</div>';return;}
+  if(!shown.length){scroll.innerHTML='<div class="mylist-empty">Nothing in this view.</div>';return;}
+  scroll.innerHTML='';
+  const frag=document.createDocumentFragment();
+  shown.forEach(ch=>{
+    const row=document.createElement('div'); row.className='mylist-row';
+    const logo=document.createElement('img'); logo.className='mylist-logo'; logo.src=ch.logo||''; logo.alt='';
+    logo.onerror=function(){this.style.display='none';};
+    const name=document.createElement('div'); name.className='mylist-name'; name.textContent=ch.name;
+    name.title=ch.name+'\nClick to preview';
+    name.onclick=()=>previewMyListChannel(ch);
+    const star=document.createElement('span'); star.className='mylist-star'+(ch.starred?' starred':''); star.textContent='★';
+    const epgDot=document.createElement('button');
+    const g = guideStatus(ch);
+    epgDot.className='guide-pill '+g.cls;
+    epgDot.textContent=g.label;
+    epgDot.title=g.title + '\n\nClick to choose guide data for this channel.';
+    epgDot.onclick=(e)=>{e.stopPropagation();openEpgModal(ch);};
+    const cp=document.createElement('button'); cp.className='mylist-copy'; cp.title='Copy stream URL: '+ch.url;
+    cp.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+    cp.onclick=(e)=>{e.stopPropagation();copyToClipboard(ch.url).then(()=>showToast(`Copied stream URL for "${ch.name}"`)).catch(()=>showToast('Copy failed'));};
+    // Copy EPG info button
+    const epgCp=document.createElement('button'); epgCp.className='mylist-epg-copy';
+    epgCp.textContent='📡';
+    // NostalgiaTV binds to OUR epg.xml using the channel's id in it
+    const chEpgUrl = profileEpgUrl();
+    const guideChId = channelGuideId(ch);
+    epgCp.title = guideChId ? `Copy NostalgiaTV binding info\nXMLTV URL: ${chEpgUrl}\nGuide Channel: ${guideChId}` : 'Save & Rebuild first, then copy';
+    epgCp.onclick=(e)=>{
+      e.stopPropagation();
+      if(!guideChId){showToast('Save & Rebuild first so this channel has a guide id.');return;}
+      const text = `EPG URL: ${chEpgUrl}\nGuide Channel: ${guideChId}\nStream URL: ${ch.url}`;
+      copyToClipboard(text).then(()=>showToast(`Copied EPG info for "${ch.name}"`)).catch(()=>showToast('Copy failed'));
+    };
+    // Retest — confirm this saved channel still plays from here
+    const testState=document.createElement('span');
+    testState.className='mylist-teststate '+(ch.testState||'');
+    testState.textContent = ch.testState==='live'?'LIVE':ch.testState==='dead'?'DEAD':ch.testState==='testing'?'…':'';
+    if(ch.testDetail) testState.title=ch.testDetail;
+    const retest=document.createElement('button'); retest.className='mylist-retest'; retest.textContent='▶'; retest.title='Retest this stream';
+    retest.onclick=(e)=>{e.stopPropagation();retestOne(ch);};
+    let repBtn = null;
+    if (ch.replacement && ch.testState === 'dead') {
+      const rep = document.createElement('button'); repBtn = rep; rep.className = 'mylist-replace'; rep.textContent = '↻ Replace';
+      rep.title = `This stream stopped working. A working copy was found:\n${ch.replacement.name} — ${ch.replacement.source}\nClick to swap it in (keeps the same channel id, number and guide).`;
+      rep.onclick = (e) => { e.stopPropagation(); replaceChannel(ch); };
+    }
+    const rm=document.createElement('button'); rm.className='mylist-remove'; rm.textContent='✕'; rm.title='Remove';
+    rm.title='Remove from My List';
+    rm.onclick=()=>removeFromList(ch.url);
+    row.appendChild(logo); row.appendChild(name); row.appendChild(testState); if (repBtn) row.appendChild(repBtn); row.appendChild(star); row.appendChild(retest); row.appendChild(cp); row.appendChild(epgCp); row.appendChild(epgDot); row.appendChild(rm);
+    frag.appendChild(row);
+  });
+  scroll.appendChild(frag);
+}
+
+// ── Player ──
+function playChannel(ch,idx) {
+  if(playingIdx===idx){stopPlayer();return;}
+  setPlayerCollapsed(false);
+  $('guide-now').style.display='none';
+  stopPlayer(); playingIdx=idx;
+  document.querySelectorAll('.ch-row').forEach(r=>r.classList.remove('playing'));
+  document.querySelectorAll('.play-btn').forEach(b=>b.classList.remove('playing'));
+  const row=$('row-'+idx); if(row)row.classList.add('playing');
+  const btn=$('play-'+idx); if(btn)btn.classList.add('playing');
+
+  $('player-title').textContent=ch.name;
+  $('player-meta').textContent=[ch.language,ch.country,ch.group].filter(Boolean).join(' · ')||'Untagged';
+  $('player-idle').style.display='none';
+  $('audio-tracks').innerHTML=''; $('audio-label').style.display='none';
+  $('btn-confirm-eng').style.display='none'; $('btn-exclude').style.display='none';
+  setStatus('loading','Connecting…');
+
+  const video=$('player-video');
+  const url=ch.url;
+  const isHLS=url.includes('.m3u8')||url.includes('m3u8')||url.endsWith('/');
+
+  if(Hls.isSupported()&&(isHLS||!url.match(/\.(mp4|mkv|avi|mov|wmv)$/i))){
+    const hls=new Hls({enableWorker:false,maxBufferLength:15,maxMaxBufferLength:30});
+    currentHls=hls; hls.loadSource(url); hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>{
+      video.play().catch(()=>{});
+      setStatus('live','Live');
+      $('btn-confirm-eng').style.display=ch.engConfirmed?'none':'flex';
+      $('btn-exclude').style.display='flex';
+    });
+    hls.on(Hls.Events.AUDIO_TRACKS_UPDATED,()=>renderAudioTracks(hls,ch));
+    hls.on(Hls.Events.AUDIO_TRACK_SWITCHED,()=>renderAudioTracks(hls,ch));
+    hls.on(Hls.Events.ERROR,(_,data)=>{
+      if(data.fatal){setStatus('error','Stream error — try another channel');$('btn-exclude').style.display='flex';}
+    });
+  } else {
+    video.src=url;
+    video.onplaying=()=>{setStatus('live','Live');$('btn-confirm-eng').style.display=ch.engConfirmed?'none':'flex';$('btn-exclude').style.display='flex';};
+    video.onerror=()=>{setStatus('error','Could not play stream');$('btn-exclude').style.display='flex';};
+    video.play().catch(()=>{});
+  }
+}
+
+function renderAudioTracks(hls,ch) {
+  const tracks=hls.audioTracks; if(!tracks||!tracks.length)return;
+  $('audio-label').style.display='block';
+  const container=$('audio-tracks'); container.innerHTML='';
+  const ENG=new Set(['english','eng','en','en-us','en-gb']);
+  let hasEng=false, firstEngIdx=-1;
+  tracks.forEach((t,i)=>{
+    const lang=(t.lang||t.language||'').toLowerCase();
+    const name=t.name||t.lang||'Track '+(i+1);
+    const isEng=ENG.has(lang)||/english/i.test(name);
+    if(isEng&&firstEngIdx<0)firstEngIdx=i;
+    if(isEng)hasEng=true;
+    const pill=document.createElement('button');
+    pill.className='audio-pill'+(isEng?' eng':'')+(hls.audioTrack===i?' active':'');
+    pill.textContent=name+(lang&&lang!==name.toLowerCase()?` (${lang})`:'');
+    pill.onclick=()=>{hls.audioTrack=i;document.querySelectorAll('.audio-pill').forEach((p,j)=>p.classList.toggle('active',j===i));};
+    container.appendChild(pill);
+  });
+  if(hasEng&&firstEngIdx>=0){
+    hls.audioTrack=firstEngIdx;
+    document.querySelectorAll('.audio-pill').forEach((p,j)=>p.classList.toggle('active',j===firstEngIdx));
+    setStatus('live',`Live — ${tracks.length} audio track${tracks.length>1?'s':''}, auto-switched to English`);
+    $('btn-confirm-eng').style.display='none';
+  } else {
+    setStatus('live',`Live — ${tracks.length} audio track${tracks.length>1?'s':''} detected`);
+  }
+}
+
+function stopPlayer() {
+  const video=$('player-video');
+  if(currentHls){currentHls.destroy();currentHls=null;}
+  video.pause(); video.removeAttribute('src'); video.load();
+  video.onplaying=null; video.onerror=null;
+  document.querySelectorAll('.ch-row').forEach(r=>r.classList.remove('playing'));
+  document.querySelectorAll('.play-btn').forEach(b=>b.classList.remove('playing'));
+  $('player-idle').style.display='flex';
+  $('player-title').textContent='No channel selected';
+  $('player-meta').textContent='Click ▶ on any channel to preview';
+  $('audio-tracks').innerHTML=''; $('audio-label').style.display='none';
+  $('btn-confirm-eng').style.display='none'; $('btn-exclude').style.display='none';
+  setStatus('idle','Idle'); playingIdx=-1;
+}
+function setStatus(state,text) {
+  $('player-dot').className='player-dot'+(state==='live'?' live':state==='error'?' error':'');
+  $('player-status-text').textContent=text;
+}
+
+// ── Confirm / Exclude ──
+function confirmEnglish() {
+  if(playingIdx<0)return;
+  const ch=channels[playingIdx]; ch.engConfirmed=true; ch.excluded=false;
+  const row=$('row-'+playingIdx); if(row)row.classList.add('eng-override');
+  $('btn-confirm-eng').style.display='none';
+  showToast(`"${ch.name}" confirmed as English.`);
+}
+function excludeChannel() {
+  if(playingIdx<0)return;
+  const ch=channels[playingIdx]; ch.excluded=true; ch.checked=false;
+  const row=$('row-'+playingIdx);
+  if(row){row.classList.add('hidden');const cb=row.querySelector('.ch-cb');if(cb)cb.checked=false;}
+  removeFromList(ch.url); stopPlayer(); updateStats();
+  showToast(`"${ch.name}" excluded.`);
+}
+
+// ── Guide channel list (from the server — only guides that have real listings) ──
+let epgDb = [];        // [{id, name, source, kind, has_data, until, logo}]
+let epgDbIndex = {};   // id -> entry
+let epgLoaded = false;
+let epgModalTarget = null;
+
+async function loadGuideList() {
+  try {
+    const res = await fetch('/' + activeProfile + '/epgtalk-channels.json', {cache:'no-store'});
+    const data = res.ok ? await res.json() : [];
+    // keep only well-formed entries (a bad entry used to crash the search)
+    epgDb = (Array.isArray(data) ? data : []).filter(e => e && typeof e.id === 'string' && typeof e.name === 'string');
+  } catch(e) { epgDb = []; }
+  epgDbIndex = {};
+  epgDb.forEach(e => { epgDbIndex[e.id] = e; });
+  epgLoaded = epgDb.length > 0;
+  return epgLoaded;
+}
+// old name kept so existing calls still work
+async function loadAllEpgSources() { return loadGuideList(); }
+
+// counts for the My List filter chips + the steps strip
+function updateEpgStatus() {
+  const c = {all: myList.length, ok: 0, needs: 0, dead: 0};
+  myList.forEach(ch => { if (guideStatus(ch).cls === 'ok') c.ok++; else c.needs++;
+                         if (ch.testState === 'dead') c.dead++; });
+  ['all','ok','needs','dead'].forEach(k => { const el = $('mlc-' + k); if (el) el.textContent = c[k]; });
+  updateSteps();
+}
+
+// Auto-match: normalize names and fuzzy-score against the DB
+function normName(s) {
+  return s.toLowerCase()
+    .replace(/\b(hd|fhd|4k|uhd|sd|us|uk|usa|the|\+)\b/g,'')
+    .replace(/[^a-z0-9]/g,'').trim();
+}
+
+// Only an EXACT name match to exactly ONE guide channel with current listings
+// is applied automatically. Partial-name matches (the old "Comedy Central
+// Pluto TV" -> cable Comedy Central mistake) are gone; FAST channels are never
+// auto-matched. Everything else becomes a suggestion after Save & Rebuild.
+function bestMatch(ch) {
+  if (!epgLoaded || !epgDb.length || looksFast(ch)) return null;
+  const q = normName(ch.name);
+  if (!q) return null;
+  const hits = epgDb.filter(e => e.has_data !== false && normName(e.name) === q);
+  const ids = new Set(hits.map(h => h.id));
+  return ids.size === 1 ? hits[0] : null;
+}
+
+function resetAllEPG() {
+  if (!epgLoaded) { showToast('Load EPG database first.'); return; }
+  if (!confirm('Reset ALL guide choices (including ones you picked by hand) and re-run auto-match?')) return;
+  myList.forEach(ch => { ch.tvgId = ''; ch.epgUrl = ''; ch.epgPicked = false; markEpgChanged(ch); });
+  matchAllEPG();
+}
+
+function matchAllEPG() {
+  if (!epgLoaded) { showToast('Load EPG database first.'); return; }
+  let matched = 0;
+  myList.forEach(ch => {
+    if (isUserPick(ch)) return;                       // never overwrite your choices
+    if (ch.tvgId) {                                   // ID came from the source playlist:
+      const e = epgDbIndex[ch.tvgId];                 // keep it only if the guide really has it
+      if (e && e.has_data !== false) return;
+    }
+    const m = bestMatch(ch);
+    if (m && m.id !== ch.tvgId) {
+      ch.tvgId = m.id;
+      if (m._xmlUrl) ch.epgUrl = m._xmlUrl;
+      markEpgChanged(ch);
+      matched++;
+    }
+  });
+  save(); renderMyList(); updateEpgStatus();
+  showToast(`Auto-matched ${matched} channel${matched !== 1 ? 's' : ''} (exact names only). Press Save & Rebuild — close calls will show up as suggestions.`, 6000);
+}
+
+// EPG modal
+async function openEpgModal(ch) {
+  if (!epgLoaded) {
+    showToast('Loading the guide channel list…');
+    await loadAllEpgSources();
+    if (!epgLoaded) { showToast('Could not load the guide list — run Save & Rebuild once first.', 5000); return; }
+  }
+  epgModalTarget = ch;
+  $('epg-ch-name').textContent = ch.name;
+  $('epg-search-input').value = cleanQuery(ch.name);
+  $('epg-ch-url').value = profileEpgUrl();   // NostalgiaTV always reads OUR guide
+  $('epg-modal-backdrop').classList.add('open');
+  searchEPG(ch.name);
+  setTimeout(() => $('epg-search-input').focus(), 50);
+}
+
+function closeEpgModal() {
+  if (epgModalTarget) save();
+  $('epg-modal-backdrop').classList.remove('open');
+  epgModalTarget = null;
+}
+
+function handleEpgBackdrop(e) {
+  if (e.target === $('epg-modal-backdrop')) closeEpgModal();
+}
+
+function copyChannelEpgInfo() {
+  if (!epgModalTarget) return;
+  const epgUrl = $('epg-ch-url').value.trim();
+  const guideId = channelGuideId(epgModalTarget) || '(Save & Rebuild first)';
+  const text = `EPG URL: ${epgUrl}\nGuide Channel: ${guideId}`;
+  copyToClipboard(text)
+    .then(() => showToast('Copied EPG URL + Guide Channel ID'))
+    .catch(() => showToast('Copy failed'));
+}
+
+// Lightweight similarity (0-1) for ranking guide candidates in the modal.
+function simScore(a, b) {
+  a = normName(a); b = normName(b);
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  // token-ish ratio via longest common subsequence length / max length
+  let m = a.length, n = b.length;
+  const dp = Array(n + 1).fill(0);
+  for (let i = 1; i <= m; i++) {
+    let prev = 0;
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j];
+      dp[j] = (a[i-1] === b[j-1]) ? prev + 1 : Math.max(dp[j], dp[j-1]);
+      prev = tmp;
+    }
+  }
+  return dp[n] / Math.max(m, n);
+}
+
+// "On now" lookup for guide ids (from the server's cached guides)
+async function fetchNowNext(ids) {
+  if (!ids.length) return {};
+  try {
+    const res = await fetch(API + '/api/now-next', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ids})});
+    return res.ok ? await res.json() : {};
+  } catch(e) { return {}; }
+}
+function nowText(nn) {
+  if (!nn) return '';
+  const t = p => (p && p.title) ? p.title : '';
+  const parts = [];
+  if (t(nn.now)) parts.push('On now: ' + t(nn.now));
+  if (t(nn.next)) parts.push('Next: ' + t(nn.next));
+  return parts.join('  ·  ');
+}
+
+// "MovieSphere AU (1080p)" -> "MovieSphere": drop quality tags, bracketed bits
+// and country codes so the search ranks the right channel first
+function cleanQuery(q) {
+  return String(q || '')
+    .replace(/\(.*?\)|\[.*?\]/g, ' ')
+    .replace(/\b(1080[pi]?|720[pi]?|480[pi]?|2160p?|4k|uhd|fhd|hd|sd|au|uk|gb|us|usa|ca|nz|ie|geo-?blocked)\b/gi, ' ')
+    .replace(/\s+/g, ' ').trim() || String(q || '').trim();
+}
+let _searchTimer = null, _searchSeq = 0;
+function searchEPG(q) {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => runSearchEPG(q), 120);
+}
+function runSearchEPG(q) {
+  const container = $('epg-results');
+  q = cleanQuery(q);
+  try {
+    if (!epgLoaded) { container.innerHTML = '<div class="epg-none">Guide list not loaded yet — press Save &amp; Rebuild once.</div>'; return; }
+    const norm = normName(String(q || ''));
+    if (!norm) { container.innerHTML = '<div class="epg-none">Type a channel name to search</div>'; return; }
+    const wantFast = epgModalTarget ? looksFast(epgModalTarget) : false;
+
+    const scored = [];
+    for (const entry of epgDb) {
+      const s0 = Math.max(simScore(q, entry.name), simScore(q, entry.id));
+      if (s0 > 0.25) scored.push({ entry, score: Math.round(s0 * 100) });
+    }
+    // listings first, then confidence, then the matching kind (FAST for FAST streams)
+    const kindOk = e => ((e.kind === 'fast') === wantFast) ? 1 : 0;
+    scored.sort((a, b) => ((b.entry.has_data !== false) - (a.entry.has_data !== false))
+                        || (b.score - a.score) || (kindOk(b.entry) - kindOk(a.entry)));
+    const results = scored.slice(0, 40);
+    if (!results.length) { container.innerHTML = '<div class="epg-none">No matches — try a shorter name</div>'; return; }
+
+    container.innerHTML = '';
+    const help = document.createElement('div');
+    help.className = 'cand-warn'; help.style.color = 'var(--text2)';
+    help.textContent = 'Tip: preview the stream, then pick the guide whose "On now" matches what you see.';
+    container.appendChild(help);
+    if (results[0].score < 55) {
+      const warn = document.createElement('div');
+      warn.className = 'cand-warn';
+      warn.textContent = '⚠ Best match is only ' + results[0].score + '% — this channel may not be in any guide. A wrong pick shows the wrong shows; leaving it as a placeholder is fine.';
+      container.appendChild(warn);
+    }
+    const frag = document.createDocumentFragment();
+    const nowCells = {};
+    results.forEach(({entry, score}) => {
+      const row = document.createElement('div');
+      row.className = 'epg-result-row' + (epgModalTarget?.tvgId === entry.id ? ' selected' : '');
+      const logo = document.createElement('img');
+      logo.className = 'epg-result-logo'; logo.src = entry.logo || ''; logo.alt = '';
+      logo.onerror = function() { this.style.display='none'; };
+      const mid = document.createElement('div'); mid.style.flex = '1'; mid.style.minWidth = '0';
+      const name = document.createElement('div'); name.className = 'epg-result-name'; name.textContent = entry.name;
+      const idDiv = document.createElement('div'); idDiv.className = 'epg-result-id';
+      const srcTag = document.createElement('span'); srcTag.className = 'epg-source-tag';
+      srcTag.textContent = entry.source || 'guide';
+      idDiv.appendChild(srcTag);
+      if (entry.has_data === false) {
+        const nd = document.createElement('span'); nd.className = 'epg-nodata';
+        nd.textContent = 'no current listings'; nd.title = 'Picking this would only give a placeholder';
+        idDiv.appendChild(nd);
+      } else if (entry.until) {
+        const u = document.createElement('span'); u.className = 'epg-until';
+        u.textContent = 'listings ' + fmtAhead(entry.until);
+        idDiv.appendChild(u);
+      }
+      const nowEl = document.createElement('span'); nowEl.className = 'cand-now';
+      if (entry.has_data !== false) nowCells[entry.id] = nowEl;
+      mid.appendChild(name); mid.appendChild(idDiv); mid.appendChild(nowEl);
+      const pill = document.createElement('span');
+      pill.className = 'cand-score ' + (score >= 75 ? 'hi' : score >= 55 ? 'mid' : 'lo');
+      pill.textContent = score + '%';
+      row.appendChild(logo); row.appendChild(mid); row.appendChild(pill);
+      row.onclick = () => selectEpgId(entry);
+      frag.appendChild(row);
+    });
+    container.appendChild(frag);
+    // fill "On now" for the top candidates
+    const seq = ++_searchSeq;
+    fetchNowNext(Object.keys(nowCells).slice(0, 20)).then(nn => {
+      if (seq !== _searchSeq) return;
+      Object.entries(nn).forEach(([id, v]) => { if (nowCells[id]) nowCells[id].textContent = nowText(v); });
+    });
+  } catch(err) {
+    container.innerHTML = '<div class="epg-none">Search failed: ' + xmlEscape(String(err && err.message || err)) + '</div>';
+    console.error('searchEPG', err);
+  }
+}
+
+function selectEpgId(entry) {
+  if (!epgModalTarget) return;
+  if (entry.has_data === false &&
+      !confirm(`"${entry.name}" has no current listings, so this would still only show a placeholder. Use it anyway?`)) return;
+  epgModalTarget.tvgId = entry.id;
+  epgModalTarget.epgPicked = true;
+  markEpgChanged(epgModalTarget);
+  learnAlias(epgModalTarget, entry.id);
+  // Store the EPG XML URL from this entry's source
+  if (entry._xmlUrl) {
+    epgModalTarget.epgUrl = entry._xmlUrl;
+    $('epg-ch-url').value = entry._xmlUrl;
+  }
+  // also update logo if channel has none
+  if (!epgModalTarget.logo && entry.logo) epgModalTarget.logo = entry.logo;
+  save(); renderMyList(); updateEpgStatus();
+  closeEpgModal();
+  showToast(`EPG ID set: ${entry.id}`);
+}
+
+function clearEpgId() {
+  if (!epgModalTarget) return;
+  epgModalTarget.tvgId = '';
+  epgModalTarget.epgUrl = '';
+  epgModalTarget.epgPicked = true;   // "no guide" is your choice too — auto-match leaves it alone
+  markEpgChanged(epgModalTarget);
+  save(); renderMyList(); updateEpgStatus();
+  closeEpgModal();
+  showToast('EPG ID cleared.');
+}
+
+// ── XMLTV / EPG XML builder ──
+function xmlEscape(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function xmltvDate(date) {
+  // Format: YYYYMMDDHHmmss +0000
+  const p = n => String(n).padStart(2,'0');
+  return `${date.getUTCFullYear()}${p(date.getUTCMonth()+1)}${p(date.getUTCDate())}${p(date.getUTCHours())}${p(date.getUTCMinutes())}${p(date.getUTCSeconds())} +0000`;
+}
+
+function buildXMLTV(list) {
+  const startNum = parseInt($('ch-start-num')?.value) || null;
+  const lines = ['<?xml version="1.0" encoding="UTF-8"?>','<!DOCTYPE tv SYSTEM "xmltv.dtd">','<tv generator-info-name="IPTV Curator">'];
+
+  // Build a map of id -> first channel entry to deduplicate
+  // Channels sharing the same tvgId get one <channel> block using the first occurrence
+  const seenIds = new Map(); // id -> {ch, chNo}
+  list.forEach((ch, i) => {
+    const id = ch.tvgId || `ch${startNum !== null ? startNum + i : i + 1}`;
+    const chNo = startNum !== null ? startNum + i : i + 1;
+    if (!seenIds.has(id)) seenIds.set(id, { ch, chNo });
+  });
+
+  // Write one <channel> block per unique id
+  seenIds.forEach(({ ch, chNo }, id) => {
+    lines.push(`  <channel id="${xmlEscape(id)}">`);
+    lines.push(`    <display-name>${xmlEscape(ch.name)}</display-name>`);
+    lines.push(`    <display-name>${chNo}</display-name>`);
+    if (ch.logo) lines.push(`    <icon src="${xmlEscape(ch.logo)}"/>`);
+    lines.push(`  </channel>`);
+  });
+
+  // Generate 7 days of stub programmes — 1 hour blocks
+  // Only one set of programmes per unique id (use first matched channel's name)
+  const now = new Date();
+  now.setUTCMinutes(0,0,0);
+  const DAYS = 7;
+  const HOURS = DAYS * 24;
+
+  seenIds.forEach(({ ch }, id) => {
+    const cleanName = ch.name.replace(/\s*\(.*?\)\s*/g,'').trim(); // strip (1080p) etc
+    for (let h = 0; h < HOURS; h++) {
+      const start = new Date(now.getTime() + h * 3600000);
+      const stop  = new Date(now.getTime() + (h+1) * 3600000);
+      lines.push(`  <programme start="${xmltvDate(start)}" stop="${xmltvDate(stop)}" channel="${xmlEscape(id)}">`);
+      lines.push(`    <title lang="en">${xmlEscape(cleanName)}</title>`);
+      lines.push(`    <desc lang="en">Live stream of ${xmlEscape(cleanName)}</desc>`);
+      if (ch.group && ch.group !== 'Undefined') lines.push(`    <category lang="en">${xmlEscape(ch.group)}</category>`);
+      lines.push(`  </programme>`);
+    }
+  });
+
+  lines.push('</tv>');
+  return lines.join('\n');
+}
+
+function dlText(content, name, mime) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], {type: mime}));
+  a.download = name; a.click();
+}
+
+// ── Export (EPG-aware) ──
+function buildExtInf(ch, chNum) {
+  let line = ch.extinf || '';
+  const tvgId = ch.uid || ch.tvgId || '';   // permanent id
+  if (/tvg-id="[^"]*"/i.test(line)) {
+    line = line.replace(/tvg-id="[^"]*"/i, `tvg-id="${tvgId}"`);
+  } else {
+    line = line.replace('#EXTINF:-1', `#EXTINF:-1 tvg-id="${tvgId}"`);
+  }
+  if (chNum !== null) {
+    if (/tvg-chno="[^"]*"/i.test(line)) {
+      line = line.replace(/tvg-chno="[^"]*"/i, `tvg-chno="${chNum}"`);
+    } else {
+      line = line.replace('#EXTINF:-1', `#EXTINF:-1 tvg-chno="${chNum}"`);
+    }
+  }
+  return line;
+}
+
+function buildM3U(list) {
+  const hasEpg = list.some(c => c.tvgId);
+  const epgUrl = $('epg-url-input')?.value?.trim() || profileEpgUrl();
+  const header = hasEpg
+    ? `#EXTM3U url-tvg="${epgUrl}" x-tvg-url="${epgUrl}"\n`
+    : '#EXTM3U\n';
+  const startNum = parseInt($('ch-start-num')?.value) || null;
+  return header + list.map((ch, i) => {
+    const chNum = startNum !== null ? startNum + i : null;
+    return buildExtInf(ch, chNum) + '\n' + ch.url;
+  }).join('\n') + '\n';
+}
+
+function dl(content, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], {type:'audio/x-mpegurl'}));
+  a.download = name; a.click();
+}
+function dateStr() { return new Date().toISOString().slice(0,10); }
+
+function exportMyList() {
+  if (!myList.length) { showToast('Your list is empty.'); return; }
+  dl(buildM3U(myList), 'playlist.m3u');
+  showToast(`Exported playlist.m3u (a backup copy). Your TV uses the hosted URLs — use Save & Rebuild to update them.`, 5000);
+}
+function exportStarred() {
+  const s = myList.filter(c => c.starred);
+  if (!s.length) { showToast('No starred channels in your list.'); return; }
+  dl(buildM3U(s), 'playlist.m3u');
+  showToast(`Exported ${s.length} starred channels as playlist.m3u.`);
+}
+
+// ── Import ──
+function importMyList(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const parsed = parseM3U(e.target.result);
+    if (!parsed.length) { showToast('No channels found in that file.'); return; }
+    let added = 0;
+    parsed.forEach(ch => {
+      if (!myList.find(m => m.url === ch.url)) { myList.push({...ch}); added++; }
+    });
+    save(); renderMyList(); updateStats();
+    // auto-match any newly imported channels if DB is loaded
+    if (epgLoaded) matchAllEPG();
+    showToast(added ? `Imported ${added} new channel${added > 1 ? 's' : ''} — ${parsed.length - added} already in list.` : 'All channels already in your list.');
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ── Same-origin app API (served by server.py on this same port) ──
+const API = ''; // same origin — no host/port needed
+let activeProfile = 'main';
+let profiles = [{name:'Main', slug:'main'}];
+let lastResultsByUrl = {};   // {stream url: result} from the last rebuild (server truth)
+let lastSuggestions = [];    // "did you mean?" guide matches from the last rebuild
+let lastRunStamp = '';
+
+function profileEpgUrl() { return window.location.origin + '/' + activeProfile + '/epg.xml'; }
+function originalTvgId(ch) { const m = (ch.extinf||'').match(/tvg-id="([^"]*)"/i); return m ? m[1] : ''; }
+// a guide choice YOU made (or cleared) — auto-match never overwrites these
+function isUserPick(ch) { return !!ch.epgPicked || (!!ch.tvgId && ch.tvgId !== originalTvgId(ch)); }
+function markEpgChanged(ch) { ch.epgDirty = true; }
+// the channel id NostalgiaTV should bind to inside OUR epg.xml
+function channelGuideId(ch) {
+  if (ch.uid) return ch.uid;               // permanent — never changes
+  if (ch.epgDirty) return ch.tvgId || '';
+  const r = lastResultsByUrl[ch.url];
+  return (r && r.channel_id) || ch.tvgId || '';
+}
+
+const FAST_HINTS = ['pluto.tv','plex.tv','roku','samsung','jmp2.uk','xumo','tubi','stirr','localnow','distro','amagi.tv','wurl','vizio','lgchannels','frequency.stream','fubo'];
+function looksFast(ch) {
+  const u = (ch.url||'').toLowerCase();
+  if (FAST_HINTS.some(h => u.includes(h))) return true;
+  return /\b(pluto|samsung|roku|plex|xumo|tubi|stirr|local now|distro|vizio|lg channels|fast)\b/i.test((ch.name||'') + ' ' + (ch.group||''));
+}
+
+const METHOD_TEXT = {exact:'its own guide ID', variant:'its own guide ID (feed variant)', alias:'your saved pick', normalized:'an exact name match', fuzzy:'a similar name'};
+const REASON_TEXT = {
+  fast: 'This is a FAST channel — the cable network with the same name may air different shows. Compare before using.',
+  ambiguous: 'Several guide channels share this name — pick the right one.',
+  fuzzy: 'The name is similar but not identical.',
+  expired: 'Its own guide listings ran out.'
+};
+function fmtAhead(iso) {
+  if (!iso) return '';
+  const h = (new Date(iso) - Date.now()) / 3600000;
+  if (h <= 0) return 'ended';
+  return h < 48 ? `about ${Math.round(h)} h ahead` : `about ${Math.round(h/24)} days ahead`;
+}
+// Honest guide status for one My List channel
+function guideStatus(ch) {
+  const r = ch.epgDirty ? null : lastResultsByUrl[ch.url];
+  if (!r) return {cls:'pending', label:'Unchecked', title: ch.epgDirty
+      ? 'Guide choice changed — press Save & Rebuild to check it.'
+      : 'Not checked yet — press Save & Rebuild to see whether real guide data exists.'};
+  if (r.state === 'matched') return {cls:'ok', label:'✓ Guide',
+      title:`Real guide data from "${r.guide_name||r.guide_id}" (${r.guide_id}), found by ${METHOD_TEXT[r.method]||r.method}.` + (r.until ? ` Listings run ${fmtAhead(r.until)}.` : '')};
+  if (r.suggestion) return {cls:'suggest', label:'Suggestion',
+      title:`No guide data in use. Possible match: "${r.suggestion_name}". ${REASON_TEXT[r.reason]||''} The TV shows the channel name as a placeholder for now.`};
+  if (r.state === 'stub_chosen') return {cls:'none', label:'Placeholder',
+      title:'You chose the placeholder — the TV guide shows the channel name.'};
+  if (r.state === 'stub_expired') return {cls:'expired', label:'Expired',
+      title:'Its guide listings have run out — the TV shows the channel name as a placeholder until the guide source updates.'};
+  return {cls:'none', label:'Placeholder', title:'No guide data found — the TV shows the channel name as a placeholder.'};
+}
+
+async function learnAlias(ch, guideId) {
+  try {
+    await fetch(API + P('/api/learn-alias'), {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name: ch.name, guide_id: guideId, url: ch.url, group: ch.group||''})});
+  } catch(e) {}
+}
+
+// ── "Did you mean?" suggestions window ──
+function pendingSuggestions() {
+  return lastSuggestions.filter(sg => myList.some(c => (sg.urls||[]).includes(c.url) && !c.epgDirty));
+}
+function updateSuggestionsButton() {
+  const n = pendingSuggestions().length, b = $('btn-suggestions');
+  if (!b) return;
+  b.style.display = n ? '' : 'none';
+  b.textContent = `💡 ${n} guide suggestion${n!==1?'s':''} to review`;
+}
+function openSuggestions() { renderSuggestions(); $('sugg-backdrop').classList.add('open'); }
+function closeSuggestions() { $('sugg-backdrop').classList.remove('open'); }
+function renderSuggestions() {
+  const box = $('sugg-list'), list = pendingSuggestions();
+  box.innerHTML = '';
+  if (!list.length) { box.innerHTML = '<div class="epg-none">Nothing left to review.</div>'; return; }
+  const nowCells = {};
+  list.forEach(sg => {
+    const row = document.createElement('div'); row.className = 'sugg-row';
+    const t = document.createElement('div'); t.className = 'sugg-text';
+    const top = document.createElement('div');
+    top.textContent = `${sg.channel}  →  "${sg.guide_name}"  (${Math.round(sg.score*100)}%)`;
+    const why = document.createElement('div'); why.className = 'sugg-why';
+    why.textContent = (sg.guide_source ? `From ${sg.guide_source}. ` : '') + (REASON_TEXT[sg.reason] || '');
+    const nowEl = document.createElement('div'); nowEl.className = 'sugg-why';
+    nowCells[sg.guide_id] = nowEl;
+    t.appendChild(top); t.appendChild(why); t.appendChild(nowEl);
+    const use = document.createElement('button'); use.className = 'btn-green btn-xs'; use.textContent = 'Use it';
+    use.title = 'Use this guide data for the channel (then Save & Rebuild)';
+    use.onclick = () => applySuggestion(sg);
+    const look = document.createElement('button'); look.className = 'btn-ghost btn-xs'; look.textContent = 'Choose…';
+    look.title = 'Open the guide search for this channel';
+    look.onclick = () => { const ch = myList.find(c => (sg.urls||[]).includes(c.url)); closeSuggestions(); if (ch) openEpgModal(ch); };
+    const pv = document.createElement('button'); pv.className = 'btn-ghost btn-xs'; pv.textContent = '▶';
+    pv.title = 'Preview the stream to compare with "On now"';
+    pv.onclick = () => { const ch = myList.find(c => (sg.urls||[]).includes(c.url)); if (ch) previewMyListChannel(ch); };
+    row.appendChild(t); row.appendChild(pv); row.appendChild(use); row.appendChild(look);
+    box.appendChild(row);
+  });
+  fetchNowNext(Object.keys(nowCells)).then(nn => {
+    Object.entries(nn).forEach(([id, v]) => { if (nowCells[id]) nowCells[id].textContent = nowText(v) || 'No listing right now'; });
+  });
+}
+function applySuggestion(sg) {
+  myList.filter(c => (sg.urls||[]).includes(c.url)).forEach(c => {
+    c.tvgId = sg.guide_id; c.epgPicked = true; markEpgChanged(c); learnAlias(c, sg.guide_id);
+  });
+  save(); renderMyList(); renderSuggestions(); updateSuggestionsButton();
+  showToast(`Using "${sg.guide_name}" for ${sg.channel} — press Save & Rebuild to apply.`, 5000);
+}
+
+// Start ch# is remembered per profile (it used to reset to 700 on every reload,
+// which silently renamed channels without a guide ID and broke TV bindings)
+function loadStartNum() {
+  const v = localStorage.getItem('iptv-startnum:' + activeProfile);
+  $('ch-start-num').value = v || '700';
+}
+function saveStartNum() {
+  localStorage.setItem('iptv-startnum:' + activeProfile, $('ch-start-num').value);
+  showToast('Start channel number saved. Save & Rebuild to apply it.');
+}
+
+// append ?profile= to an API path
+function P(path) {
+  return path + (path.includes('?') ? '&' : '?') + 'profile=' + encodeURIComponent(activeProfile);
+}
+
+async function loadProfiles() {
+  try {
+    profiles = await (await fetch(API + '/api/profiles')).json();
+  } catch(e) { profiles = [{name:'Main', slug:'main'}]; }
+  // restore last-selected profile if it still exists
+  const saved = localStorage.getItem('iptv-active-profile');
+  if (saved && profiles.some(p => p.slug === saved)) activeProfile = saved;
+  else activeProfile = profiles[0]?.slug || 'main';
+  renderProfileSelect();
+}
+
+function renderProfileSelect() {
+  const sel = $('profile-select');
+  sel.innerHTML = '';
+  profiles.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.slug; o.textContent = p.name;
+    if (p.slug === activeProfile) o.selected = true;
+    sel.appendChild(o);
+  });
+  // show delete only for non-main profiles
+  $('btn-del-profile').style.display = (activeProfile === 'main') ? 'none' : '';
+}
+
+function onProfileChange() {
+  if (_saveTimer) pushMyList();
+  activeProfile = $('profile-select').value;
+  localStorage.setItem('iptv-active-profile', activeProfile);
+  lastResultsByUrl = {}; lastSuggestions = []; lastRunStamp = '';
+  loadStartNum();
+  loadGuideList();
+  loadMyList().then(() => { if (leftView === 'discover') loadDiscover(); });
+  updateStats();
+  renderMyList();
+  refreshEndpoints();
+  renderProfileSelect();
+  const epgField = $('epg-url-input');
+  if (epgField) epgField.value = window.location.origin + '/' + activeProfile + '/epg.xml';
+  showToast(`Switched to "${profiles.find(p=>p.slug===activeProfile)?.name||activeProfile}"`);
+}
+
+async function createProfile() {
+  const name = prompt('Name the new profile (e.g. Adult, Kids). It becomes the URL, so keep it simple:');
+  if (!name || !name.trim()) return;
+  try {
+    const res = await fetch(API + '/api/profiles', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name: name.trim()})
+    });
+    if (res.ok) {
+      const r = await res.json();
+      await loadProfiles();
+      activeProfile = r.slug;
+      localStorage.setItem('iptv-active-profile', activeProfile);
+      myList = []; save(); lastResultsByUrl = {}; lastSuggestions = []; lastRunStamp = '';
+      loadStartNum();
+      renderProfileSelect(); renderMyList(); updateStats(); refreshEndpoints();
+      showToast(`Created "${r.name}" — fresh empty profile. Add channels, then Save & Rebuild.`, 6000);
+    } else if (res.status === 409) {
+      showToast('A profile with that name already exists.', 5000);
+    } else {
+      showToast('Could not create profile.', 5000);
+    }
+  } catch(e) { showToast('Could not reach the app server.', 5000); }
+}
+
+async function deleteProfile() {
+  if (activeProfile === 'main') { showToast('The main profile can\'t be deleted.'); return; }
+  const p = profiles.find(x => x.slug === activeProfile);
+  if (!confirm(`Delete profile "${p?.name}"? This removes its playlist and EPG on the server. Your other profiles are untouched.`)) return;
+  try {
+    const res = await fetch(API + '/api/profiles/' + encodeURIComponent(activeProfile), {method:'DELETE'});
+    if (res.ok) {
+      localStorage.removeItem('iptv-mylist:' + activeProfile);
+      await loadProfiles();
+      activeProfile = 'main';
+      localStorage.setItem('iptv-active-profile', 'main');
+      lastResultsByUrl = {}; lastSuggestions = []; lastRunStamp = '';
+      loadStartNum();
+      loadMyList(); renderProfileSelect(); renderMyList(); updateStats(); refreshEndpoints();
+      showToast('Profile deleted. Back on Main.');
+    } else {
+      showToast('Could not delete profile.', 5000);
+    }
+  } catch(e) { showToast('Could not reach the app server.', 5000); }
+}
+
+// ── Save & Rebuild: write playlist.m3u to the server AND rebuild EPG, one action ──
+async function saveAndRebuild() {
+  if (!myList.length) { showToast('Your list is empty — nothing to save.'); return; }
+  const btn = $('btn-save-rebuild');
+  btn.disabled = true;
+  btn.textContent = '⏳ Rebuilding…';
+  showToast('Saving playlist and rebuilding EPG — this takes 1-3 minutes…', 5000);
+  try {
+    const res = await fetch(API + P('/api/save-and-rebuild'), {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ list: myList,
+                             start_num: parseInt($('ch-start-num').value) || null,
+                             epg_url: $('epg-url-input')?.value?.trim() || profileEpgUrl() })
+    });
+    if (res.ok) {
+      const r = await res.json();
+      adoptUids(r.list);
+      myList.forEach(c => { delete c.epgDirty; });
+      save(); markPublished();
+      lastResultsByUrl = r.channel_results_by_url || {};
+      lastSuggestions = r.suggestions || [];
+      lastRunStamp = r.finished_at || '';
+      renderMyList(); updateEpgStatus(); updateSuggestionsButton();
+      showToast(`Saved & rebuilt — ${r.matched} with real guide data, ${r.stubbed} showing a placeholder.`, 6000);
+      const n = pendingSuggestions().length;
+      if (n) setTimeout(() => showToast(`${n} channel${n>1?'s have':' has'} a possible guide match — click "💡 guide suggestions" to review.`, 7000), 6500);
+      refreshEndpoints();
+      loadGuideList();
+    } else if (res.status === 409) {
+      showToast('A rebuild is already in progress — wait for it to finish.', 5000);
+    } else {
+      showToast('Save & Rebuild failed — see console.', 6000);
+      console.error('save-and-rebuild:', await res.text());
+    }
+  } catch(e) {
+    showToast('Could not reach the app server. Is the container running?', 6000);
+  }
+  btn.disabled = false;
+  btn.innerHTML = '💾 Save &amp; Rebuild';
+}
+
+// ── Retest a single saved channel ──
+async function retestOne(ch) {
+  ch.testState = 'testing'; renderMyList();
+  try {
+    const res = await fetch(API + '/api/test-stream', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ url: ch.url })
+    });
+    const r = await res.json();
+    ch.testState = r.ok ? 'live' : 'dead';
+    ch.testDetail = r.detail + ' · ' + new Date().toLocaleTimeString();
+  } catch(e) {
+    ch.testState = 'dead'; ch.testDetail = 'server unreachable';
+  }
+  save(); renderMyList();
+}
+
+// ── Retest every saved channel at once ──
+async function retestAll() {
+  if (!myList.length) { showToast('Your list is empty.'); return; }
+  const btn = $('btn-retest-all');
+  btn.disabled = true;
+  myList.forEach(c => c.testState = 'testing'); renderMyList();
+  const BATCH = 8, total = myList.length;
+  let done = 0, live = 0, failed = false;
+  for (let i = 0; i < total; i += BATCH) {
+    const chunk = myList.slice(i, i + BATCH);
+    btn.textContent = `⏳ ${done}/${total}`;
+    try {
+      const res = await fetch(API + '/api/test-streams', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ urls: chunk.map(c => c.url) })
+      });
+      const r = await res.json();
+      const byUrl = {}; r.results.forEach(x => byUrl[x.url] = x);
+      chunk.forEach(c => {
+        const x = byUrl[c.url];
+        c.testState = x ? (x.ok ? 'live' : 'dead') : 'dead';
+        c.testDetail = x ? (x.detail + ' · ' + new Date().toLocaleTimeString()) : 'no result';
+        if (x && x.ok) live++;
+      });
+    } catch(e) {
+      chunk.forEach(c => { c.testState = ''; });
+      failed = true;
+    }
+    done += chunk.length;
+    renderMyList();
+  }
+  save(); renderMyList();
+  showToast(failed ? 'Some channels could not be tested — app server not reachable.'
+                   : `Retest complete — ${live} live, ${total - live} dead of ${total}. Hover a DEAD tag to see why.`, 6000);
+  btn.disabled = false; btn.textContent = '▶ Retest all';
+}
+
+// ── Endpoints panel: fill URLs + freshness dots from /api/status ──
+function copyEndpoint(id) {
+  const v = $(id).value;
+  copyToClipboard(v).then(()=>showToast('URL copied!')).catch(()=>{$(id).select();showToast('Select and copy manually.');});
+}
+function fmtAge(sec) {
+  if (sec == null) return 'unknown';
+  if (sec < 90) return 'just now';
+  if (sec < 5400) return Math.round(sec/60) + ' min ago';
+  if (sec < 172800) return Math.round(sec/3600) + ' h ago';
+  return Math.round(sec/86400) + ' d ago';
+}
+async function refreshEndpoints() {
+  try {
+    const r = await (await fetch(API + P('/api/status'))).json();
+    $('ep-url-playlist').value = r.playlist_url;
+    $('ep-url-epg').value = r.epg_url;
+    // playlist dot: present = ok
+    $('ep-dot-playlist').className = 'ep-dot ' + (r.playlist.exists ? 'ok' : 'bad');
+    // epg dot: fresh (<26h) = ok, older = stale, missing = bad
+    let epgCls = 'bad';
+    if (r.epg.exists) epgCls = (r.epg.age_seconds < 93600) ? 'ok' : 'stale';
+    $('ep-dot-epg').className = 'ep-dot ' + epgCls;
+    const parts = [];
+    if (r.epg.exists) parts.push('EPG updated ' + fmtAge(r.epg.age_seconds));
+    if (r.last_run && r.last_run.matched != null) parts.push(`${r.last_run.matched} matched / ${r.last_run.stubbed} stub`);
+    if (r.guides_fetched_at) parts.push('guides refreshed ' + fmtAge((Date.now() - new Date(r.guides_fetched_at)) / 1000));
+    parts.push('auto-refresh ' + r.scheduled);
+    $('ep-meta').textContent = parts.join(' · ');
+    if ($('lan-url-input')) $('lan-url-input').value = r.playlist_url;
+    if ($('nt-epg-url')) $('nt-epg-url').value = r.epg_url;
+    const lr = r.last_run;
+    if (lr && lr.finished_at && lr.finished_at !== lastRunStamp && lr.channel_results_by_url) {
+      lastRunStamp = lr.finished_at;
+      lastResultsByUrl = lr.channel_results_by_url;
+      lastSuggestions = lr.suggestions || [];
+      renderMyList(); updateEpgStatus();
+    }
+    updateSuggestionsButton();
+  } catch(e) {
+    $('ep-meta').textContent = 'App server not reachable — is the container running?';
+  }
+}
+
+// ── Host modal ──
+function openHostModal()  { $('modal-backdrop').classList.add('open'); }
+function closeHostModal() { $('modal-backdrop').classList.remove('open'); }
+function handleBackdropClick(e) { if(e.target===$('modal-backdrop'))closeHostModal(); }
+function copyLanUrl() {
+  const v=$('lan-url-input').value;
+  copyToClipboard(v).then(()=>showToast('URL copied!')).catch(()=>showToast('Select and copy manually.'));
+}
+function copyRawM3U() {
+  if(!myList.length){showToast('Your list is empty.');return;}
+  copyToClipboard(buildM3U(myList)).then(()=>showToast('Raw M3U copied to clipboard!')).catch(()=>showToast('Could not copy — try Export instead.'));
+}
+
+// ── Load from file (browse or drag-drop) ──
+function loadFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => loadFromText(e.target.result, file.name);
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function loadFromText(text, sourceName) {
+  stopped=false; liveCount=0; deadCount=0; checkedCount=0; channels=[];
+  stopPlayer();
+  $('btn-start').disabled=true; $('btn-stop').disabled=false;
+  $('toolbar').style.display='none';
+  $('prog-fill').style.width='0%';
+  $('playlist-url').value = '(loaded from file: ' + sourceName + ')';
+  updateStats();
+
+  const parsed = parseM3U(text);
+  const filterEn = $('opt-english').checked;
+  channels = filterEn ? parsed.filter(isEnglish) : parsed;
+  $('filter-notice').style.display = filterEn ? 'flex' : 'none';
+  updateStats(); renderChannels(); $('toolbar').style.display='flex';
+
+  showToast(`Loaded ${channels.length} channels from ${sourceName}` + (filterEn ? ` (${parsed.length} before filter)` : ''));
+
+  // auto-start checking
+  const concurrency = parseInt($('opt-concurrency').value);
+  let idx = 0;
+  async function worker() {
+    while (idx < channels.length && !stopped) {
+      const i = idx++, ch = channels[i];
+      const badge = $('badge-'+i);
+      if (badge) { badge.textContent='…'; badge.className='ch-badge badge-checking'; }
+      const ok = await checkOne(ch);
+      checkedCount++;
+      if (ok) liveCount++; else deadCount++;
+      $('prog-fill').style.width = Math.round(checkedCount/channels.length*100) + '%';
+      $('hs-live').textContent = liveCount + ' live';
+      if (badge) {
+        const isGeo = ch.status==='geo';
+        badge.textContent = ok ? '● Live' : isGeo ? '🚫 Geo' : '✕ Dead';
+        badge.className = 'ch-badge ' + (ok ? 'badge-live' : isGeo ? 'badge-geo' : 'badge-dead');
+        badge.title = ch.testDetail || '';
+      }
+    }
+  }
+  Promise.all(Array.from({length:concurrency}, worker)).then(() => {
+    $('btn-start').disabled=false; $('btn-stop').disabled=true;
+    showToast(stopped ? `Stopped — ${liveCount} live so far` : `Done — ${liveCount} live out of ${channels.length}`);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// My List filter chips
+// ══════════════════════════════════════════════════════════════════════
+let listFilter = 'all';
+function inListFilter(ch) {
+  if (listFilter === 'all') return true;
+  const ok = guideStatus(ch).cls === 'ok';
+  if (listFilter === 'ok') return ok;
+  if (listFilter === 'needs') return !ok;
+  if (listFilter === 'dead') return ch.testState === 'dead';
+  return true;
+}
+function setListFilter(f) {
+  listFilter = f;
+  document.querySelectorAll('.ml-chip').forEach(b => b.classList.toggle('active', b.dataset.f === f));
+  renderMyList();
+}
+function removeFiltered() {
+  const shown = myList.filter(inListFilter);
+  if (!shown.length) return;
+  const what = listFilter === 'dead' ? 'that failed their last retest' : 'without guide data';
+  if (!confirm(`Remove ${shown.length} channel${shown.length>1?'s':''} ${what} from My List?`)) return;
+  const urls = new Set(shown.map(c => c.url));
+  myList = myList.filter(c => !urls.has(c.url));
+  save(); renderMyList(); updateStats();
+  showToast(`Removed ${urls.size}. Press Save & Rebuild to publish.`, 5000);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Preview a My List channel + show what its guide says is on now
+// ══════════════════════════════════════════════════════════════════════
+function previewMyListChannel(ch) {
+  setPlayerCollapsed(false);
+  try { playChannel(ch, 'ml:' + ch.url); } catch(e) { setStatus('error', 'Player could not start'); }
+  showGuideNow(ch);
+}
+async function showGuideNow(ch) {
+  const el = $('guide-now');
+  const r = ch.epgDirty ? null : lastResultsByUrl[ch.url];
+  let gid = null, label = '';
+  if (ch.epgDirty && ch.tvgId) { gid = ch.tvgId; label = 'Chosen guide (not published yet)'; }
+  else if (r && r.state === 'matched') { gid = r.guide_id; label = `Guide · ${r.guide_source || r.guide_name}`; }
+  else if (r && r.suggestion) { gid = r.suggestion; label = `Suggested guide · ${r.suggestion_source || r.suggestion_name}`; }
+  el.style.display = '';
+  if (!gid) { el.innerHTML = '<b>Guide:</b> placeholder (channel name) — no guide data.'; return; }
+  el.textContent = 'Loading guide…';
+  const nn = (await fetchNowNext([gid]))[gid];
+  if (!nn) { el.innerHTML = '<b>Guide:</b> the server is still loading guide data (it does this after a restart) — try again in a minute.'; return; }
+  el.innerHTML = '';
+  const b = document.createElement('b'); b.textContent = label + ' — ';
+  el.appendChild(b);
+  el.appendChild(document.createTextNode(nowText(nn) || 'no listing right now'));
+}
+function previewFromModal() {
+  if (!epgModalTarget) return;
+  setPlayerCollapsed(false);
+  const ch = epgModalTarget;
+  try { playChannel(ch, 'ml:' + ch.url); } catch(e) { setStatus('error', 'Player could not start'); }
+  showGuideNow(ch);
+}
+function removeFromModal() {
+  const ch = epgModalTarget;
+  if (!ch) return;
+  if (!confirm(`Remove "${ch.name}" from My List?`)) return;
+  closeEpgModal();
+  removeFromList(ch.url);
+  showToast('Removed. Press Save & Rebuild to publish.');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Collapsible player
+// ══════════════════════════════════════════════════════════════════════
+function setPlayerCollapsed(c) {
+  const col = $('right-col');
+  if (!col) return;
+  if (c && !col.classList.contains('player-collapsed')) stopPlayer();
+  col.classList.toggle('player-collapsed', c);
+  $('btn-player-toggle').textContent = c ? 'Show player' : 'Hide player';
+  try { localStorage.setItem('iptv-player-collapsed', c ? '1' : '0'); } catch(e) {}
+}
+function togglePlayer() { setPlayerCollapsed(!$('right-col').classList.contains('player-collapsed')); }
+
+// ══════════════════════════════════════════════════════════════════════
+// Draggable divider (width remembered; double-click resets)
+// ══════════════════════════════════════════════════════════════════════
+function defaultRightWidth() { return Math.round(window.innerWidth * 0.46); }
+function setRightWidth(px) {
+  const max = Math.max(360, window.innerWidth - 386), min = 360;
+  px = Math.max(min, Math.min(max, px));
+  document.querySelector('.layout').style.setProperty('--right-w', px + 'px');
+  return px;
+}
+function initDivider() {
+  const d = $('col-divider');
+  const saved = parseInt(localStorage.getItem('iptv-right-w') || '', 10);
+  setRightWidth(saved || defaultRightWidth());
+  d.addEventListener('mousedown', e => {
+    e.preventDefault();
+    d.classList.add('dragging'); document.body.classList.add('resizing');
+    const move = ev => setRightWidth(window.innerWidth - ev.clientX - 3);
+    const up = ev => {
+      d.classList.remove('dragging'); document.body.classList.remove('resizing');
+      window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
+      try { localStorage.setItem('iptv-right-w', String(setRightWidth(window.innerWidth - ev.clientX - 3))); } catch(_) {}
+    };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+  });
+  d.addEventListener('dblclick', () => { try { localStorage.removeItem('iptv-right-w'); } catch(_) {} setRightWidth(defaultRightWidth()); });
+  window.addEventListener('resize', () => {
+    const v = parseInt(localStorage.getItem('iptv-right-w') || '', 10);
+    setRightWidth(v || defaultRightWidth());
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Steps strip
+// ══════════════════════════════════════════════════════════════════════
+function listHash() {
+  const str = buildM3U(myList);
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return String(h);
+}
+function markPublished() { try { localStorage.setItem('iptv-pubhash:' + activeProfile, listHash()); } catch(e) {} }
+function isPublished() {
+  try { return myList.length > 0 && localStorage.getItem('iptv-pubhash:' + activeProfile) === listHash(); }
+  catch(e) { return false; }
+}
+function setStep(n, state, sub) {
+  const el = $('step-' + n);
+  if (!el) return;
+  el.classList.remove('done', 'current');
+  if (state) el.classList.add(state);
+  if (sub != null) $('step-' + n + '-sub').textContent = sub;
+}
+function updateSteps() {
+  if (!$('steps')) return;
+  const has = myList.length > 0;
+  const needs = myList.filter(c => guideStatus(c).cls !== 'ok').length;
+  const sugg = pendingSuggestions().length;
+  const pub = isPublished() && !myList.some(c => c.epgDirty);
+  setStep(1, (channels.length || has) ? 'done' : 'current',
+          channels.length ? `${channels.length} found · ${liveCount} live` : (has ? 'Add more anytime' : 'Discover, or scan a playlist'));
+  setStep(2, has ? 'done' : (channels.length ? 'current' : ''),
+          has ? `${myList.length} in My List` : '"+ Add" in Discover, or ★ in a scan');
+  setStep(3, !has ? '' : (sugg ? 'current' : 'done'),
+          !has ? 'After adding channels'
+               : sugg ? `${sugg} suggestion${sugg>1?'s':''} to review`
+               : needs ? `${myList.length - needs} with guide · ${needs} placeholder` : 'Every channel has guide data');
+  setStep(4, !has ? '' : (pub ? 'done' : (sugg ? '' : 'current')),
+          !has ? 'Publish to your TV' : (pub ? 'Published — up to date' : 'Changes not published yet'));
+  setStep(5, pub ? 'current' : '', 'Your URLs & what to do');
+}
+function stepAction(n) {
+  if (n === 1) { setLeftView('discover');
+                 showToast('Discover lists working channels you don\'t have yet — or use "Scan a playlist" to check any URL yourself.', 6000); }
+  if (n === 2) {
+    if (!channels.length) showToast('Run a Check first, then star ★ channels or tick them and press "+ My list".', 5000);
+    else { setFilter('live'); showToast('Showing live channels — star ★ the ones you want, or tick them and press "+ My list".', 5000); }
+  }
+  if (n === 3) {
+    if (pendingSuggestions().length) openSuggestions();
+    else { setListFilter('needs');
+           showToast('These have no guide data. Click a channel\'s guide button to pick a guide, keep the placeholder, or remove it.', 6000); }
+  }
+  if (n === 4) saveAndRebuild();
+  if (n === 5) openHostModal();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Guide sources window
+// ══════════════════════════════════════════════════════════════════════
+async function openGuideSources() { $('gs-backdrop').classList.add('open'); await renderGuideSources(); }
+function closeGuideSources() { $('gs-backdrop').classList.remove('open'); }
+async function renderGuideSources() {
+  const box = $('gs-list');
+  let d;
+  try { d = await (await fetch(API + '/api/guide-sources')).json(); }
+  catch(e) { box.innerHTML = '<div class="epg-none">App server not reachable.</div>'; return; }
+  box.innerHTML = '';
+  d.sources.forEach(src => {
+    const row = document.createElement('div'); row.className = 'gs-row';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!src.enabled;
+    cb.title = 'Use this guide source';
+    cb.onchange = () => toggleGuideSource(src.key, cb.checked);
+    const main = document.createElement('div'); main.className = 'gs-main';
+    const lab = document.createElement('div'); lab.className = 'gs-label'; lab.textContent = src.label + ' ';
+    const kind = document.createElement('span'); kind.className = 'gs-kind' + (src.kind === 'fast' ? ' fast' : '');
+    kind.textContent = src.kind === 'fast' ? 'FAST' : 'Cable';
+    lab.appendChild(kind);
+    const st = document.createElement('div'); st.className = 'gs-status';
+    const s2 = src.status;
+    if (!src.enabled) st.textContent = 'Off';
+    else if (!s2) st.textContent = 'Not downloaded yet — press Refresh guides now';
+    else if (s2.ok) st.textContent = `${s2.with_listings} channels with listings` + (s2.error ? ` · some files failed (${s2.error.slice(0,80)})` : '');
+    else { st.textContent = 'Not working — ' + (s2.error || 'no data'); st.classList.add('bad'); }
+    st.title = src.url || '';
+    main.appendChild(lab); main.appendChild(st);
+    row.appendChild(cb); row.appendChild(main);
+    if (src.custom) {
+      const rm = document.createElement('button'); rm.className = 'btn-ghost btn-xs'; rm.textContent = 'Remove';
+      rm.onclick = () => removeGuideSource(src.key);
+      row.appendChild(rm);
+    }
+    box.appendChild(row);
+  });
+  const age = d.fetched_at ? fmtAge((Date.now() - new Date(d.fetched_at)) / 1000) : null;
+  $('gs-meta').textContent = (age ? `Last refreshed ${age}` : 'Not refreshed yet') +
+    ` · refreshes automatically every ${d.refresh_hours} h` + (d.running ? ' · a refresh is running…' : '');
+}
+async function postGuideSources(body) {
+  const res = await fetch(API + '/api/guide-sources', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if (!res.ok) { let m = ''; try { m = (await res.json()).detail; } catch(_) {} throw new Error(m || ('HTTP ' + res.status)); }
+}
+async function toggleGuideSource(key, enabled) {
+  try { await postGuideSources({key, enabled}); showToast('Saved — press "Refresh guides now" to apply.'); }
+  catch(e) { showToast('Could not save: ' + e.message, 5000); }
+}
+async function addGuideSource() {
+  const label = $('gs-add-label').value.trim(), url = $('gs-add-url').value.trim(), kind = $('gs-add-kind').value;
+  if (!url) { showToast('Paste an XMLTV URL first.'); return; }
+  try {
+    await postGuideSources({add: {label, url, kind}});
+    $('gs-add-label').value = ''; $('gs-add-url').value = '';
+    await renderGuideSources();
+    showToast('Added — press "Refresh guides now" to download it.', 5000);
+  } catch(e) { showToast('Could not add: ' + e.message, 5000); }
+}
+async function removeGuideSource(key) {
+  if (!confirm('Remove this guide source?')) return;
+  try { await postGuideSources({remove: key}); await renderGuideSources(); } catch(e) { showToast('Could not remove: ' + e.message, 5000); }
+}
+async function refreshGuides() {
+  const btn = $('btn-gs-refresh');
+  btn.disabled = true; btn.textContent = '⏳ Downloading guides… (1–3 min)';
+  try {
+    const res = await fetch(API + '/api/refresh-guides', {method:'POST'});
+    if (res.status === 409) showToast('A refresh is already running — give it a minute.', 5000);
+    else if (!res.ok) showToast('Refresh failed — see the server log.', 5000);
+    else {
+      const r = await res.json();
+      const mine = (r.profiles || {})[activeProfile];
+      lastRunStamp = '';                 // force pickup of the new results
+      await refreshEndpoints(); await loadGuideList();
+      showToast(mine ? `Guides refreshed — ${mine.matched} channels with guide data, ${mine.stubbed} placeholders.` : 'Guides refreshed.', 6000);
+    }
+  } catch(e) { showToast('Could not reach the app server.', 5000); }
+  btn.disabled = false; btn.textContent = '⟳ Refresh guides now';
+  renderGuideSources();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Left side: Discover / Scan a playlist
+// ══════════════════════════════════════════════════════════════════════
+let leftView = 'scan';
+let discItems = [], discData = null, discShown = [], discLimit = 200;
+let discPrevSeen = 0;              // "new since last visit" cutoff for this visit
+let _discPoll = null;
+
+function setLeftView(v) {
+  leftView = v;
+  document.querySelector('.left-col').classList.toggle('discover-on', v === 'discover');
+  $('vtab-discover').classList.toggle('active', v === 'discover');
+  $('vtab-scan').classList.toggle('active', v === 'scan');
+  try { localStorage.setItem('iptv-left-view', v); } catch(e) {}
+  if (v === 'discover') {
+    discPrevSeen = parseFloat(localStorage.getItem('iptv-disc-seen') || '0');
+    loadDiscover().then(() => {
+      try { localStorage.setItem('iptv-disc-seen', String(Date.now() / 1000)); } catch(e) {}
+      $('disc-badge').textContent = '';
+    });
+  }
+}
+
+async function loadDiscover() {
+  try {
+    const res = await fetch(API + P('/api/discover'), {cache:'no-store'});
+    discData = await res.json();
+  } catch(e) { $('disc-status').textContent = 'App server not reachable.'; return; }
+  discItems = discData.items || [];
+  fillDiscFilters();
+  renderDiscStatus();
+  renderDiscover();
+  if (discData.state && discData.state.running) startDiscPoll();
+}
+
+function fillDiscFilters() {
+  const keep = (id, vals, label) => {
+    const sel = $(id), cur = sel.value;
+    sel.innerHTML = `<option value="">${label}</option>` +
+      vals.map(v => `<option value="${xmlEscape(v)}">${xmlEscape(v)}</option>`).join('');
+    if (vals.includes(cur)) sel.value = cur;
+  };
+  keep('disc-source', [...new Set(discItems.map(i => i.source).filter(Boolean))].sort(), 'All sources');
+  keep('disc-group', [...new Set(discItems.map(i => i.group).filter(Boolean))].sort((a,b)=>a.localeCompare(b)), 'All categories');
+}
+
+function renderDiscStatus() {
+  const st = (discData && discData.state) || {};
+  const lr = discData && discData.last_run;
+  const el = $('disc-status');
+  if (st.running) {
+    el.textContent = `Working: ${st.phase}` + (st.total ? ` — ${st.done} of ${st.total}` : '') + '…';
+    $('disc-prog').style.display = '';
+    $('disc-prog-fill').style.width = st.total ? Math.round(st.done / st.total * 100) + '%' : '5%';
+    $('btn-disc-run').disabled = true;
+    return;
+  }
+  $('disc-prog').style.display = 'none';
+  $('btn-disc-run').disabled = false;
+  if (!lr) {
+    el.innerHTML = '<b>Discover hasn\'t run yet.</b> Press "Look for new channels now" — it downloads the watched playlists, tests every new English channel and checks its guide data (a few minutes the first time). After that it runs by itself every night.';
+    return;
+  }
+  const bad = (lr.sources || []).filter(x => !x.ok);
+  el.innerHTML = `<b>${discItems.length.toLocaleString()} working channels</b> you don't have yet · last checked ${fmtAge((Date.now() - new Date(lr.finished_at)) / 1000)} · runs nightly` +
+    (bad.length ? `<br><span style="color:var(--amber)">⚠ ${bad.map(b => b.label).join(', ')} could not be downloaded last time.</span>` : '');
+}
+
+function discFiltered() {
+  const q = ($('disc-search').value || '').trim().toLowerCase();
+  const src = $('disc-source').value, grp = $('disc-group').value;
+  const needGuide = $('disc-guide').checked, hideHave = $('disc-hide-have').checked, onlyNew = $('disc-only-new').checked;
+  const mine = new Set(myList.map(c => c.url));
+  const nkey = n => normName(cleanQuery(n || '')).replace(/^the/, '').replace(/(channel|network|tv)$/,'');
+  const myNames = new Set(myList.map(c => nkey(c.name)));
+  return discItems.filter(i => {
+    if (mine.has(i.url)) return false;
+    if (q && !(i.name || '').toLowerCase().includes(q) && !(i.group || '').toLowerCase().includes(q)) return false;
+    if (src && i.source !== src) return false;
+    if (grp && i.group !== grp) return false;
+    if (needGuide && !(i.guide && i.guide.state === 'guide')) return false;
+    if (hideHave && (i.have_name || myNames.has(nkey(i.name)))) return false;
+    if (onlyNew && !((i.first_seen || 0) > discPrevSeen)) return false;
+    return true;
+  });
+}
+
+function renderDiscover(more) {
+  if (!more) discLimit = 200;
+  const box = $('disc-list');
+  discShown = discFiltered();
+  $('disc-count').textContent = `${discShown.length.toLocaleString()} shown`;
+  box.innerHTML = '';
+  if (!discShown.length) {
+    box.innerHTML = '<div class="empty-state"><p>' + (discItems.length ? 'Nothing matches these filters.' : 'No channels yet — press "Look for new channels now".') + '</p></div>';
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  discShown.slice(0, discLimit).forEach(item => {
+    const row = document.createElement('div'); row.className = 'disc-row';
+    const logo = document.createElement('img'); logo.className = 'ch-logo'; logo.src = item.logo || ''; logo.alt = '';
+    logo.onerror = function(){ this.style.visibility = 'hidden'; };
+    const main = document.createElement('div'); main.className = 'disc-main';
+    const nm = document.createElement('div'); nm.className = 'disc-name'; nm.textContent = item.name; nm.title = item.name;
+    if ((item.first_seen || 0) > discPrevSeen && discPrevSeen) { const n = document.createElement('span'); n.className = 'disc-new'; n.textContent = 'NEW'; nm.appendChild(n); }
+    const meta = document.createElement('div'); meta.className = 'disc-meta';
+    const g = item.guide || {};
+    const gtxt = g.state === 'guide' ? `<span class="ok">✓ Guide data</span> (${xmlEscape(g.guide_source || '')})`
+               : g.state === 'maybe' ? `<span class="maybe">Possible guide: ${xmlEscape(g.guide_name || '')}</span>`
+               : 'No guide data — would show a placeholder';
+    meta.innerHTML = `${xmlEscape(item.source || '')}${item.group ? ' · ' + xmlEscape(item.group) : ''} · ${gtxt}`;
+    main.appendChild(nm); main.appendChild(meta);
+    const pv = document.createElement('button'); pv.className = 'ch-icon-btn'; pv.textContent = '▶'; pv.title = 'Preview';
+    pv.onclick = () => previewDiscItem(item);
+    const add = document.createElement('button'); add.className = 'btn-green btn-xs'; add.textContent = '+ Add'; add.title = 'Add to My List';
+    add.onclick = () => addDiscItems([item]);
+    const no = document.createElement('button'); no.className = 'btn-ghost btn-xs'; no.textContent = '✕'; no.title = 'Not interested — never show this one again';
+    no.onclick = () => dismissDiscItems([item]);
+    row.appendChild(logo); row.appendChild(main); row.appendChild(pv); row.appendChild(add); row.appendChild(no);
+    frag.appendChild(row);
+  });
+  box.appendChild(frag);
+  if (discShown.length > discLimit) {
+    const more = document.createElement('button'); more.className = 'btn-ghost btn-sm'; more.style.margin = '8px';
+    more.textContent = `Show ${Math.min(200, discShown.length - discLimit)} more`;
+    more.onclick = () => { discLimit += 200; renderDiscover(true); };
+    box.appendChild(more);
+  }
+}
+
+function discToChannel(i) {
+  return {name: i.name, url: i.url, logo: i.logo || '', group: i.group || '', extinf: i.extinf || ('#EXTINF:-1,' + i.name),
+          tvgId: i.tvg_id || '', language: i.language || '', country: i.country || '',
+          testState: 'live', testDetail: (i.detail || 'tested by Discover'), status: 'live', addedAt: new Date().toISOString()};
+}
+function addDiscItems(items) {
+  const have = new Set(myList.map(c => c.url));
+  let n = 0;
+  items.forEach(i => { if (!have.has(i.url)) { myList.push(discToChannel(i)); have.add(i.url); n++; } });
+  save(); renderMyList(); updateStats(); renderDiscover();
+  showToast(n ? `Added ${n} channel${n>1?'s':''} to My List — press Save & Rebuild to publish.` : 'Already in My List.', 5000);
+}
+function addShown() {
+  if (!discShown.length) return;
+  if (discShown.length > 25 && !confirm(`Add all ${discShown.length} shown channels to My List?`)) return;
+  addDiscItems(discShown.slice());
+}
+async function dismissDiscItems(items) {
+  const urls = new Set(items.map(i => i.url));
+  discItems = discItems.filter(i => !urls.has(i.url));
+  renderDiscover(); renderDiscStatus();
+  try { await fetch(API + '/api/discover/dismiss', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({urls: [...urls]})}); } catch(e) {}
+}
+function dismissShown() {
+  if (!discShown.length) return;
+  if (!confirm(`Hide all ${discShown.length} shown channels for good?`)) return;
+  dismissDiscItems(discShown.slice());
+  showToast('Hidden. They won\'t show up in Discover again.');
+}
+function previewDiscItem(item) {
+  setPlayerCollapsed(false);
+  try { playChannel({name: item.name, url: item.url, language: item.language || '', country: item.country || '', group: item.group || ''}, 'd:' + item.url); }
+  catch(e) { setStatus('error', 'Player could not start'); }
+  const g = item.guide || {};
+  if (g.guide_id) showGuideNowFor(g.guide_id, (g.state === 'guide' ? 'Guide · ' : 'Possible guide · ') + (g.guide_source || g.guide_name || ''));
+  else { $('guide-now').style.display = ''; $('guide-now').innerHTML = '<b>Guide:</b> none found — would show a placeholder.'; }
+}
+async function showGuideNowFor(gid, label) {
+  const el = $('guide-now');
+  el.style.display = ''; el.textContent = 'Loading guide…';
+  const nn = (await fetchNowNext([gid]))[gid];
+  if (!nn) { el.innerHTML = '<b>Guide:</b> the server is still loading guide data — try again in a minute.'; return; }
+  el.innerHTML = '';
+  const b = document.createElement('b'); b.textContent = label + ' — ';
+  el.appendChild(b); el.appendChild(document.createTextNode(nowText(nn) || 'no listing right now'));
+}
+
+async function runDiscover() {
+  try { await fetch(API + '/api/discover/run', {method:'POST'}); } catch(e) { showToast('App server not reachable.'); return; }
+  showToast('Looking for new channels — this takes a few minutes. You can keep working.', 6000);
+  startDiscPoll();
+}
+function startDiscPoll() {
+  clearInterval(_discPoll);
+  _discPoll = setInterval(async () => {
+    try {
+      const r = await (await fetch(API + P('/api/discover'), {cache:'no-store'})).json();
+      discData = r;
+      if (!r.state.running) {
+        clearInterval(_discPoll); _discPoll = null;
+        discItems = r.items || []; fillDiscFilters(); renderDiscover();
+        showToast(`Discover finished — ${discItems.length.toLocaleString()} working channels to look through.`, 6000);
+      }
+      renderDiscStatus();
+    } catch(e) {}
+  }, 2000);
+}
+async function updateDiscBadge() {
+  try {
+    const r = await (await fetch(API + P('/api/discover'), {cache:'no-store'})).json();
+    const seen = parseFloat(localStorage.getItem('iptv-disc-seen') || '0');
+    const n = (r.items || []).filter(i => (i.first_seen || 0) > seen && i.guide && i.guide.state === 'guide').length;
+    if (leftView !== 'discover') $('disc-badge').textContent = n ? (n > 999 ? '999+' : n) : '';
+  } catch(e) {}
+}
+
+// Discover sources window
+async function openDiscSources() { $('ds-backdrop').classList.add('open'); await renderDiscSources(); }
+function closeDiscSources() { $('ds-backdrop').classList.remove('open'); }
+async function renderDiscSources() {
+  const box = $('ds-list');
+  let d; try { d = await (await fetch(API + P('/api/discover'))).json(); } catch(e) { box.innerHTML = '<div class="epg-none">App server not reachable.</div>'; return; }
+  box.innerHTML = '';
+  d.sources.forEach(src => {
+    const row = document.createElement('div'); row.className = 'gs-row';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!src.enabled;
+    cb.onchange = () => postDiscSources({key: src.key, enabled: cb.checked}).then(() => showToast('Saved — used on the next run.'));
+    const main = document.createElement('div'); main.className = 'gs-main';
+    const lab = document.createElement('div'); lab.className = 'gs-label'; lab.textContent = src.label;
+    const st = document.createElement('div'); st.className = 'gs-status'; st.title = src.url;
+    const s2 = src.status;
+    if (!src.enabled) st.textContent = 'Off';
+    else if (!s2) st.textContent = 'Not checked yet';
+    else if (s2.ok) st.textContent = `${s2.count} channels · ${s2.english} English`;
+    else { st.textContent = 'Could not download — ' + (s2.error || ''); st.classList.add('bad'); }
+    main.appendChild(lab); main.appendChild(st);
+    row.appendChild(cb); row.appendChild(main);
+    if (src.custom) {
+      const rm = document.createElement('button'); rm.className = 'btn-ghost btn-xs'; rm.textContent = 'Remove';
+      rm.onclick = () => postDiscSources({remove: src.key}).then(renderDiscSources);
+      row.appendChild(rm);
+    }
+    box.appendChild(row);
+  });
+}
+async function postDiscSources(body) {
+  try { await fetch(API + '/api/discover/sources', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)}); }
+  catch(e) { showToast('Could not save.'); }
+}
+async function addDiscSource() {
+  const label = $('ds-add-label').value.trim(), url = $('ds-add-url').value.trim();
+  if (!url) { showToast('Paste a playlist URL first.'); return; }
+  await postDiscSources({add: {label, url}});
+  $('ds-add-label').value = ''; $('ds-add-url').value = '';
+  renderDiscSources(); showToast('Added — it will be checked on the next run.');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Self-healing: health check + one-click replacement
+// ══════════════════════════════════════════════════════════════════════
+function replaceChannel(ch) {
+  const r = ch.replacement;
+  if (!r) return;
+  ch.url = r.url;
+  ch.extinf = r.extinf || ch.extinf;
+  if (!ch.logo && r.logo) ch.logo = r.logo;
+  if (!ch.epgPicked && r.tvg_id) ch.tvgId = r.tvg_id;    // the new copy's own guide id
+  ch.testState = 'live'; ch.testDetail = `replacement from ${r.source}`; ch.testedAt = new Date().toISOString();
+  delete ch.replacement;
+  markEpgChanged(ch);
+  save(); renderMyList();
+  showToast(`Swapped in a working copy of ${ch.name} — same channel id and number. Press Save & Rebuild.`, 6000);
+}
+async function healthCheck() {
+  if (!myList.length) { showToast('Your list is empty.'); return; }
+  const btn = $('btn-retest-all');
+  btn.disabled = true; btn.textContent = '⏳ Checking…';
+  if (_saveTimer) await pushMyList();                  // make sure the server has the latest list
+  try { await fetch(API + '/api/selfheal/run', {method:'POST'}); }
+  catch(e) { showToast('App server not reachable.'); btn.disabled = false; btn.textContent = '🩺 Check all'; return; }
+  while (true) {
+    await new Promise(r => setTimeout(r, 1500));
+    let h; try { h = await (await fetch(API + '/api/selfheal')).json(); } catch(e) { continue; }
+    btn.textContent = h.total ? `⏳ ${h.done}/${h.total}` : '⏳ Checking…';
+    if (!h.running) {
+      await loadMyList();
+      btn.disabled = false; btn.textContent = '🩺 Check all';
+      showToast(h.dead ? `${h.dead} channel${h.dead>1?'s':''} not working · ${h.replacements} replacement${h.replacements!==1?'s':''} found — look for ↻ Replace (Dead filter).`
+                       : 'Every channel is working.', 8000);
+      if (h.dead) setListFilter('dead');
+      return;
+    }
+  }
+}
+// pick up the nightly check's results when you come back to the tab
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !_saveTimer && typeof activeProfile !== 'undefined') {
+    loadMyList(); updateDiscBadge();
+  }
+});
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', () => {
+  $('opt-res')?.addEventListener('change', applyFilters);
+  $('opt-hide-geo')?.addEventListener('change', applyFilters);
+
+  // Load profiles FIRST, then this profile's list, endpoints, and EPG url.
+  initDivider();
+  setPlayerCollapsed(localStorage.getItem('iptv-player-collapsed') === '1');
+  loadProfiles().then(() => {
+    loadGuideList().then(() => renderMyList());
+    setLeftView(localStorage.getItem('iptv-left-view') === 'discover' ? 'discover' : 'scan');
+    updateDiscBadge();
+    loadStartNum();
+    loadMyList(); updateStats(); renderMyList();
+    refreshEndpoints();
+    // Auto-fill exported-playlist EPG URL with THIS profile's real address.
+    const epgField = $('epg-url-input');
+    if (epgField) epgField.value = window.location.origin + '/' + activeProfile + '/epg.xml';
+  });
+  setInterval(refreshEndpoints, 60000);
+
+  // Drag-and-drop on channel list area
+  const dropZone = $('channel-scroll');
+  ['dragenter','dragover'].forEach(evt => dropZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('drag-over'); }));
+  ['dragleave','drop'].forEach(evt => dropZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('drag-over'); }));
+  dropZone.addEventListener('drop', e => {
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (!file.name.match(/\.m3u8?$/i)) { showToast('Drop an .m3u or .m3u8 file'); return; }
+    const reader = new FileReader();
+    reader.onload = ev => loadFromText(ev.target.result, file.name);
+    reader.readAsText(file);
+  });
+});
+</script>
+</body>
+</html>

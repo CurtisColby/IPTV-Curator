@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ═══════════════════════════════════════════════════════════════════
+     Custom channel list for the iptv-org/epg scraper (DirecTV guide)
+     Mounted into the Docker container at /epg/public/channels.xml
+
+     The xmltv_id you set here becomes the channel ID in guide.xml.
+     These IDs are what you'll pick in the IPTV Curator matching modal
+     and what NostalgiaTV binds to.
+
+     To add a channel: find its site_id in
+     https://raw.githubusercontent.com/iptv-org/epg/master/sites/directv.com/directv.com.channels.xml
+     copy the line here, and give it an xmltv_id.
+
+     To remove a channel: just delete the line. Fewer channels = faster scrape.
+     ═══════════════════════════════════════════════════════════════════ -->
+<channels>
+  <!-- Showtime family -->
+  <channel site="directv.com" site_id="23e1c6f4-81ce-4cbd-948b-93619740b339" lang="en" xmltv_id="Showtime2.us">SHOWTIME 2 HD</channel>
+  <channel site="directv.com" site_id="4128313f-fce9-474d-b5fe-c709c4e1e07d" lang="en" xmltv_id="ShowtimeNext.us">Showtime Next HD</channel>
+  <channel site="directv.com" site_id="a0652edf-0255-4cd0-b19a-3593673ea6f8" lang="en" xmltv_id="ShowtimeExtreme.us">Showtime Extreme HD</channel>
+  <channel site="directv.com" site_id="a78c644e-08a0-47d7-ada2-9d0251f556e8" lang="en" xmltv_id="ShowtimeWest.us">Paramount+ with SHOWTIME WEST HD</channel>
+  <channel site="directv.com" site_id="463bedb2-ce78-4c4e-9c3b-9b13fdee54cd" lang="en" xmltv_id="ShowtimeShowcase.us">Showtime Showcase HD</channel>
+  <channel site="directv.com" site_id="6d7bde13-2992-4f23-8b3d-ec02eaa17d4f" lang="en" xmltv_id="ShowtimeFamilyZone.us">Showtime FamilyZone HD</channel>
+
+  <!-- Cinemax family -->
+  <channel site="directv.com" site_id="577da2f8-1c59-4297-8956-c24d30b1d967" lang="en" xmltv_id="Cinemax.us">Cinemax East HD</channel>
+  <channel site="directv.com" site_id="45cdfc9d-1228-4b50-8987-7c82db99f1ba" lang="en" xmltv_id="CinemaxHits.us">Cinemax Hits HD</channel>
+  <channel site="directv.com" site_id="c6dc4d77-8cc4-4de1-9b69-8b27577c49c2" lang="en" xmltv_id="CinemaxClassics.us">Cinemax Classics HD</channel>
+  <channel site="directv.com" site_id="bf3ed883-db9f-40d0-afaa-77ca71911e24" lang="en" xmltv_id="CinemaxAction.us">Cinemax Action HD</channel>
+
+  <!-- HBO family (HBO2 was renamed "HBO Hits") -->
+  <channel site="directv.com" site_id="4fc097f1-e123-4b41-b302-faf4e7d82118" lang="en" xmltv_id="HBO.us">HBO HD East</channel>
+  <channel site="directv.com" site_id="51cfd7f4-0f6e-4c9b-b2ec-646afb3f7d93" lang="en" xmltv_id="HBO2.us">HBO Hits HD East (formerly HBO2)</channel>
+  <channel site="directv.com" site_id="9cc69dee-d1f4-4f2d-a646-657b2ddbc5f7" lang="en" xmltv_id="HBOFamily.us">HBO Movies HD (formerly HBO Family)</channel>
+  <channel site="directv.com" site_id="703c22aa-7be9-43b4-a3fb-d828479bc421" lang="en" xmltv_id="HBOComedy.us">HBO Comedy HD</channel>
+  <channel site="directv.com" site_id="5beb41da-ff97-42af-a31f-3787ee6878b6" lang="en" xmltv_id="HBODrama.us">HBO Drama HD</channel>
+
+  <!-- Starz family -->
+  <channel site="directv.com" site_id="6e5f46ea-3381-4436-9f8c-478fdf4a2ab6" lang="en" xmltv_id="StarzEdge.us">STARZ Edge HD</channel>
+  <channel site="directv.com" site_id="676e4861-8f11-40d9-9285-a78455472b29" lang="en" xmltv_id="StarzEncore.us">STARZ Encore HD</channel>
+  <channel site="directv.com" site_id="17b336f5-9ead-4b76-8526-54bc8688e6e9" lang="en" xmltv_id="StarzWest.us">STARZ West</channel>
+
+  <!-- MGM+ -->
+  <channel site="directv.com" site_id="8f79eb33-17b6-4c95-a687-f9823230e6d5" lang="en" xmltv_id="MGMPlus.us">MGM+</channel>
+  <channel site="directv.com" site_id="811a9bcb-279f-4362-8a9b-2845fe3eb636" lang="en" xmltv_id="MGMPlusMarquee.us">MGM+ MARQUEE</channel>
+
+  <!-- Basic cable (backup in case EPGTalk/GlobeTV coverage drops) -->
+  <channel site="directv.com" site_id="3c10db4e-98ac-40c0-a301-661504f60588" lang="en" xmltv_id="TNT.us">TNT HD</channel>
+  <channel site="directv.com" site_id="af2ab375-0902-4865-acb5-61df66acca5b" lang="en" xmltv_id="FX.us">FX HD</channel>
+  <channel site="directv.com" site_id="b428862c-08fc-47d1-98f4-7cc8bdbf0c31" lang="en" xmltv_id="AMC.us">AMC HD</channel>
+  <channel site="directv.com" site_id="8dc85473-5c44-444f-8ee3-f3ad6da10329" lang="en" xmltv_id="History.us">History HD</channel>
+  <channel site="directv.com" site_id="214a502e-c54a-4b61-8904-b4ce37c1e38a" lang="en" xmltv_id="USANetwork.us">USA Network HD</channel>
+  <channel site="directv.com" site_id="2fb0e133-7cd4-4817-bbc3-9698566f491e" lang="en" xmltv_id="PopTV.us">POP HD</channel>
+  <channel site="directv.com" site_id="f859a25e-eb37-4fde-bc34-612d415b8bb2" lang="en" xmltv_id="Syfy.us">SYFY HD</channel>
+  <channel site="directv.com" site_id="8ef7ede4-94b2-44c3-bced-ecf138fe1c9b" lang="en" xmltv_id="DisneyChannel.us">Disney Channel HD</channel>
+  <channel site="directv.com" site_id="e0811c53-5460-4731-a8dd-1e3e3543a4c1" lang="en" xmltv_id="DisneyChannelWest.us">Disney Channel (West)</channel>
+</channels>

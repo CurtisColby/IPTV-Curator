@@ -1,0 +1,39 @@
+# IPTV Curator — one stack, one command:  docker compose up -d
+#
+# Two services:
+#   app     — your Curator UI + file hosting + EPG merge + scheduler + testing
+#   directv — the upstream iptv-org/epg scraper (kept as-is so you get their
+#             site-scraper maintenance for free). It writes its guide into the
+#             SAME data volume, where the app picks it up as source #3.
+#
+# The old Caddy block, system cron line, and epg-trigger.service are all
+# retired by this file — nothing else to start or remember.
+
+services:
+  app:
+    build: ./app
+    container_name: iptv-curator
+    restart: unless-stopped
+    ports:
+      - "8787:8766"          # same port you use today
+    volumes:
+      - ./data:/data          # playlist.m3u, epg.xml, json, aliases, backups
+    environment:
+      - IPTV_DATA_DIR=/data
+      - IPTV_GUIDE_REFRESH_HOURS=3   # re-download guides + rebuild every 3 hours
+      - IPTV_NIGHTLY_HOUR_UTC=8      # Discover + My List health check (08:15 UTC = 2-3 AM Central)
+
+  directv:
+    image: ghcr.io/iptv-org/epg:master
+    container_name: iptv-directv-scraper
+    restart: unless-stopped
+    # The scraper reads channels.xml and writes guide.xml. We map its output
+    # into ./data/directv so the app can read ./data/directv/guide.xml.
+    volumes:
+      - ./directv-config/channels.xml:/epg/channels.xml:ro
+      - ./data/directv:/epg/public
+    # Runs its own internal cron at 2 AM; the app picks up the fresh guide.xml
+    # on its next 3-hourly guide refresh.
+    command: >
+      sh -c "npm run grab -- --channels=/epg/channels.xml --output=/epg/public/guide.xml
+      && crond -f"
