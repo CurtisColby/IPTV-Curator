@@ -4,6 +4,20 @@ A self-hosted app for building a clean, English-language IPTV lineup from free p
 
 One folder, one command: `docker compose up -d`. Then open `http://<server>:8787`.
 
+> **Looking for the original single-file version** (open the HTML in a browser, no server)? It's preserved as the [`v1-standalone`](../../releases/tag/v1-standalone) release.
+
+## Getting started
+
+1. Install Docker with the Compose plugin on your server.
+2. Download this repository and open `docker-compose.yml`. Adjust the port and the `data` volume path if you like.
+3. Start it:
+   ```
+   docker compose up -d
+   ```
+4. Open `http://<server>:8787`. The first start downloads the TV guides, which takes about a minute.
+5. Go to **✨ Discover** → **Look for new channels now**, or use **Scan a playlist**. Add channels to My List, then press **💾 Save & Rebuild**.
+6. In your IPTV player, add the playlist URL and the XMLTV guide URL shown under **Use in NostalgiaTV**.
+
 ## What it does
 
 - **Discover** — watches trusted free playlists (Samsung TV Plus, Plex, Pluto TV, Roku Channel, iptv-org, Free-TV). Every night it downloads them, keeps English channels you don't already have, tests that each one really plays, and checks whether it will get guide data. You browse the results and press **+ Add** or **✕ Not interested**.
@@ -35,15 +49,20 @@ One folder, one command: `docker compose up -d`. Then open `http://<server>:8787
 
 ```
 iptv-curator-app/
-├── docker-compose.yml     # app + DirecTV scraper (ghcr.io/iptv-org/epg)
+├── docker-compose.yml           # app + DirecTV scraper (ghcr.io/iptv-org/epg)
 ├── app/
 │   ├── Dockerfile
 │   ├── requirements.txt
-│   ├── server.py          # FastAPI: UI, hosted files, API, scheduler, Discover, self-healing
-│   ├── epg_engine.py      # guide download, matching, epg.xml builder
-│   └── iptv-checker.html  # the whole UI (single file, no build step)
-└── data/                  # NOT in git — your lists, guides, backups
+│   ├── server.py                # FastAPI: UI, hosted files, API, scheduler, Discover, self-healing
+│   ├── epg_engine.py            # guide download, matching, epg.xml builder
+│   └── iptv-checker.html        # the whole UI (single file, no build step)
+├── directv-config/channels.xml  # channels the DirecTV scraper fetches (premium networks)
+└── data/                        # created on first run — NOT in git (your lists, guides, backups)
 ```
+
+## License
+
+MIT — do whatever you want with it.
 
 ## Notes
 
